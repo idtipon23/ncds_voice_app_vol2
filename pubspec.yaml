@@ -2,7 +2,7 @@ name: ncds_voice_app_vol1
 description: "AI-Assisted Remote Patient Monitoring & Medication Adherence System"
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.2.3 <4.0.0'
@@ -13,7 +13,6 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.8.3
-  flutter_line_sdk: ^2.6.0
   flutter_dotenv: ^5.2.1
   image_picker: ^1.1.2
   google_generative_ai: ^0.4.6
