@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="/ncds_voice_app_vol2/">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Engine">
+  <meta name="description" content="NCDs Voice Tracking PWA App">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="NCDs Tracking">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>NCDs Voice App</title>
+  <link rel="manifest" href="manifest.json">
+
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
+</head>
+<body>
+  <script>
+    // 📍 ล้าง Service Worker เก่าทิ้งเมื่อมีการอัปเดตระบบ ป้องกัน PWA ค้างหน้าเดิม
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          for (let registration of registrations) {
+            registration.update();
+          }
+        });
+      });
+    }
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
