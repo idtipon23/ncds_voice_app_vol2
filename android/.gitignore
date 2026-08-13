@@ -12,3 +12,9 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# Ignore Flutter Web Build artifacts in web directory
+/web/main.dart.js
+/web/flutter_service_worker.js
+/web/flutter_bootstrap.js
+/web/version.json
+/web/.last_build_id

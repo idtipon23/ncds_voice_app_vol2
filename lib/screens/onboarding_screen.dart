@@ -5,7 +5,14 @@ import '../services/patient_profile_service.dart';
 import 'home_screen.dart';
 import '../services/patient_database_service.dart';
 
-enum OnboardingStep { age, weightHeight, diseases, medication, lifestyle, confirmation }
+enum OnboardingStep {
+  age,
+  weightHeight,
+  diseases,
+  medication,
+  lifestyle,
+  confirmation
+}
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -72,6 +79,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _startListening() async {
+    await _flutterTts.stop();
+
     if (!_isListening) {
       bool available = await _speechToText.initialize();
       if (available) {
@@ -103,7 +112,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           break;
         case OnboardingStep.weightHeight:
           // ดึงตัวเลขจากคำพูด เช่น "หนัก 76 สูง 170"
-          final numbers = RegExp(r'\d+').allMatches(text).map((m) => double.parse(m.group(0)!)).toList();
+          final numbers = RegExp(r'\d+(\.\d+)?')
+              .allMatches(text)
+              .map((m) => double.parse(m.group(0)!))
+              .toList();
           if (numbers.length >= 2) {
             _weight = numbers[0];
             _height = numbers[1];
@@ -117,19 +129,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           _currentStep = OnboardingStep.medication;
           break;
         case OnboardingStep.medication:
-          _takesMedication = text.contains("ทาน") || text.contains("มี") || text.contains("กิน");
+          if (text.contains("ไม่")) {
+            _takesMedication = false;
+          } else {
+            _takesMedication = text.contains("ทาน") ||
+                text.contains("มี") ||
+                text.contains("กิน");
+          }
           _currentStep = OnboardingStep.lifestyle;
           break;
         case OnboardingStep.lifestyle:
-          _smokes = text.contains("สูบ");
-          _drinksAlcohol = text.contains("ดื่ม");
-          _currentStep = OnboardingStep.confirmation; // วิ่งเข้าหน้าตรวจสอบข้อมูล
+          _smokes = text.contains("สูบ") && !text.contains("ไม่สูบ");
+          _drinksAlcohol = text.contains("ดื่ม") && !text.contains("ไม่ดื่ม");
+          _currentStep =
+              OnboardingStep.confirmation; // วิ่งเข้าหน้าตรวจสอบข้อมูล
           break;
         case OnboardingStep.confirmation:
           break;
       }
     });
-    
+
     // ถ้าถึงหน้า confirmation ไม่ต้องพูดคำถามเสียงแล้ว ให้เปิด Popup ทันที
     if (_currentStep == OnboardingStep.confirmation) {
       _showConfirmationDialog();
@@ -154,36 +173,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           children: [
             Icon(Icons.fact_check_rounded, color: Color(0xFF10B981)),
             SizedBox(width: 8),
-            Text('ตรวจสอบข้อมูลสุขภาพ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+            Text('ตรวจสอบข้อมูลสุขภาพ',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, color: Color(0xFF334155))),
           ],
         ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('คุณสามารถแก้ไขข้อมูลให้ถูกต้องก่อนบันทึกลงระบบได้ครับ', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const Text(
+                  'คุณสามารถแก้ไขข้อมูลให้ถูกต้องก่อนบันทึกลงระบบได้ครับ',
+                  style: TextStyle(fontSize: 13, color: Colors.grey)),
               const SizedBox(height: 16),
               TextField(
                 controller: ageController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'อายุ (ปี)', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'อายุ (ปี)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: weightController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'น้ำหนัก (กก.)', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'น้ำหนัก (กก.)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: heightController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'ส่วนสูง (ซม.)', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'ส่วนสูง (ซม.)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: diseaseController,
-                decoration: const InputDecoration(labelText: 'โรคประจำตัว', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'โรคประจำตัว', border: OutlineInputBorder()),
               ),
             ],
           ),
@@ -192,14 +219,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              setState(() => _currentStep = OnboardingStep.age); // ย้อนกลับไปเริ่มใหม่ถ้าต้องการ
+              setState(() => _currentStep =
+                  OnboardingStep.age); // ย้อนกลับไปเริ่มใหม่ถ้าต้องการ
             },
-            child: const Text('เริ่มพูดใหม่', style: TextStyle(color: Colors.grey)),
+            child: const Text('เริ่มพูดใหม่',
+                style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF10B981),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () async {
               // ดึงค่าที่อาจจะถูกแก้ใน Popup มาอัปเดตใส่ตัวแปร
@@ -213,7 +243,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Navigator.pop(ctx); // ปิด Popup
               await _saveAndPushToSupabase(); // บันทึกลง Supabase ทันที
             },
-            child: const Text('ยืนยันและบันทึก', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('ยืนยันและบันทึก',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -225,12 +257,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isSaving = true);
     try {
       final patientId = await _profileService.getCurrentPatientId();
-      
-      if (patientId != null) {
-        // คำนวณ BMI อัตโนมัติจากน้ำหนักและส่วนสูงใหม่
-        double heightM = _height / 100.0;
-        double calculatedBmi = (heightM > 0) ? (_weight / (heightM * heightM)) : 0.0;
 
+      // 📍 [แก้ไขแล้ว]: ย้ายการคำนวณ BMI มาไว้ตรงนี้ เพื่อให้ใช้งานได้ครอบคลุมทั้งฟังก์ชัน
+      double heightM = _height / 100.0;
+      double calculatedBmi =
+          (heightM > 0) ? (_weight / (heightM * heightM)) : 0.0;
+
+      if (patientId != null) {
         // 1. บันทึกตรงขึ้น Supabase Cloud (ตาราง patients)
         await _dbService.updatePatientOnboardingData(
           patientId: patientId,
@@ -248,6 +281,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'age': _age,
         'weight_kg': _weight,
         'height_cm': _height,
+        'bmi': double.parse(calculatedBmi
+            .toStringAsFixed(1)), // ตอนนี้จะมองเห็นและไม่ Error แล้วครับ
         'underlying_diseases': _diseases,
         'takes_medication': _takesMedication,
       });
@@ -263,7 +298,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       debugPrint('❌ Error saving onboarding data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาดในการบันทึก: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('เกิดข้อผิดพลาดในการบันทึก: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -287,7 +324,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   CircularProgressIndicator(color: Color(0xFF10B981)),
                   SizedBox(height: 16),
-                  Text('กำลังบันทึกข้อมูลลงฐานข้อมูล...', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                  Text('กำลังบันทึกข้อมูลลงฐานข้อมูล...',
+                      style: TextStyle(fontSize: 16, color: Colors.grey)),
                 ],
               ),
             )
@@ -307,16 +345,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)
+                          BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10)
                         ],
                       ),
                       child: Column(
                         children: [
-                          const Icon(Icons.support_agent_rounded, size: 64, color: Color(0xFF10B981)),
+                          const Icon(Icons.support_agent_rounded,
+                              size: 64, color: Color(0xFF10B981)),
                           const SizedBox(height: 16),
                           Text(
-                            _spokenText.isEmpty ? "กำลังรอคำตอบ..." : '\"$_spokenText\"',
-                            style: const TextStyle(fontSize: 20, color: Color(0xFF334155)),
+                            _spokenText.isEmpty
+                                ? "กำลังรอคำตอบ..."
+                                : '\"$_spokenText\"',
+                            style: const TextStyle(
+                                fontSize: 20, color: Color(0xFF334155)),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -326,28 +370,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       onTap: _isListening ? _stopListening : _startListening,
                       child: CircleAvatar(
                         radius: 50,
-                        backgroundColor: _isListening ? Colors.red : const Color(0xFF10B981),
-                        child: Icon(_isListening ? Icons.mic : Icons.mic_none, color: Colors.white, size: 40),
+                        backgroundColor:
+                            _isListening ? Colors.red : const Color(0xFF10B981),
+                        child: Icon(_isListening ? Icons.mic : Icons.mic_none,
+                            color: Colors.white, size: 40),
                       ),
                     ),
                     Text(
                       _isListening ? 'กำลังฟัง...' : 'แตะเพื่อพูด',
                       style: TextStyle(
-                        fontSize: 18, 
-                        color: _isListening ? Colors.red : const Color(0xFF10B981), 
-                        fontWeight: FontWeight.bold
-                      ),
+                          fontSize: 18,
+                          color: _isListening
+                              ? Colors.red
+                              : const Color(0xFF10B981),
+                          fontWeight: FontWeight.bold),
                     ),
                     if (_currentStep != OnboardingStep.confirmation)
-                       TextButton(
+                      TextButton(
                           onPressed: () {
                             setState(() {
-                               _currentStep = OnboardingStep.confirmation;
+                              _currentStep = OnboardingStep.confirmation;
                             });
                             _showConfirmationDialog();
-                          }, 
-                          child: const Text("ข้ามไปตรวจสอบข้อมูล (Skip)")
-                       )
+                          },
+                          child: const Text("ข้ามไปตรวจสอบข้อมูล (Skip)"))
                   ],
                 ),
               ),

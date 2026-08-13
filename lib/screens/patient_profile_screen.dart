@@ -4,6 +4,7 @@ import '../services/patient_profile_service.dart';
 import '../services/patient_database_service.dart';
 import '../services/vital_repository.dart';
 import '../services/th_cv_risk_calculator.dart'; // โมเดลคำนวณความเสี่ยงเดิม
+import '../widgets/bmi_bar_chart.dart';
 
 class PatientProfileScreen extends StatefulWidget {
   const PatientProfileScreen({super.key});
@@ -23,7 +24,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   final _ageController = TextEditingController();
   final _weightController = TextEditingController();
   final _heightController = TextEditingController();
-  final _bmiController = TextEditingController(); 
+  final _bmiController = TextEditingController();
   final _diseaseController = TextEditingController();
 
   bool _isSmoker = false; // 📍 สถานะสูบบุหรี่ (แก้ไขได้)
@@ -52,10 +53,13 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           _fNameController.text = profile['first_name'] ?? '';
           _lNameController.text = profile['last_name'] ?? '';
           _ageController.text = (profile['age'] ?? '').toString();
-          _weightController.text = (profile['weight'] ?? profile['weight_kg'] ?? '').toString();
-          _heightController.text = (profile['height'] ?? profile['height_cm'] ?? '').toString();
+          _weightController.text =
+              (profile['weight'] ?? profile['weight_kg'] ?? '').toString();
+          _heightController.text =
+              (profile['height'] ?? profile['height_cm'] ?? '').toString();
           _bmiController.text = (profile['bmi'] ?? '').toString();
-          _diseaseController.text = profile['underlying_diseases'] ?? profile['diseases'] ?? '';
+          _diseaseController.text =
+              profile['underlying_diseases'] ?? profile['diseases'] ?? '';
           _isSmoker = profile['smokes'] == true || profile['smokers'] == true;
           _isLoading = false; // ปลดล็อกหน้าจอให้แสดงผลทันที
         });
@@ -82,7 +86,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         setState(() {
           if (labs.isNotEmpty) _latestLab = labs.first;
           if (vitals.isNotEmpty) {
-            _latestSystolic = (vitals.first['systolic'] as num?)?.toInt() ?? 120;
+            _latestSystolic =
+                (vitals.first['systolic'] as num?)?.toInt() ?? 120;
           }
         });
       }
@@ -93,7 +98,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _isSaving = true; });
+    setState(() {
+      _isSaving = true;
+    });
 
     final updateData = {
       'age': int.tryParse(_ageController.text) ?? 0,
@@ -123,7 +130,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     }
 
     if (mounted) {
-      setState(() { 
+      setState(() {
         _isSaving = false;
         _profileData?.addAll(updateData);
       });
@@ -132,7 +139,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           content: const Text('บันทึกข้อมูลโปรไฟล์และสถานะเรียบร้อยแล้ว'),
           backgroundColor: emeraldColor,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
@@ -152,10 +160,15 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    double currentBmi = 0.0;
+    if (_profileData != null && _profileData!['bmi'] != null) {
+      currentBmi = double.tryParse(_profileData!['bmi'].toString()) ?? 0.0;
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('โปรไฟล์ผู้ป่วยและการประเมินความเสี่ยง', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('โปรไฟล์ผู้ป่วยและการประเมินความเสี่ยง',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: emeraldColor,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -174,57 +187,114 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     const SizedBox(height: 24),
 
                     // 📝 2. ฟอร์มข้อมูลส่วนตัวและสุขภาพ
-                    const Text('ข้อมูลส่วนตัวและสุขภาพ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: slateColor)),
+                    const Text('ข้อมูลส่วนตัวและสุขภาพ',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: slateColor)),
                     const SizedBox(height: 12),
-                    
+
                     Row(
                       children: [
-                        Expanded(child: TextFormField(controller: _fNameController, decoration: _inputDecoration('ชื่อ', Icons.person_outline))),
+                        Expanded(
+                            child: TextFormField(
+                                controller: _fNameController,
+                                decoration: _inputDecoration(
+                                    'ชื่อ', Icons.person_outline))),
                         const SizedBox(width: 12),
-                        Expanded(child: TextFormField(controller: _lNameController, decoration: _inputDecoration('นามสกุล', Icons.person))),
+                        Expanded(
+                            child: TextFormField(
+                                controller: _lNameController,
+                                decoration:
+                                    _inputDecoration('นามสกุล', Icons.person))),
                       ],
                     ),
                     const SizedBox(height: 16),
 
                     Row(
                       children: [
-                        Expanded(child: TextFormField(controller: _ageController, keyboardType: TextInputType.number, decoration: _inputDecoration('อายุ (ปี)', Icons.cake_outlined))),
+                        Expanded(
+                            child: TextFormField(
+                                controller: _ageController,
+                                keyboardType: TextInputType.number,
+                                decoration: _inputDecoration(
+                                    'อายุ (ปี)', Icons.cake_outlined))),
                         const SizedBox(width: 12),
-                        Expanded(child: TextFormField(controller: _weightController, keyboardType: TextInputType.number, decoration: _inputDecoration('น้ำหนัก (กก.)', Icons.monitor_weight_outlined))),
+                        Expanded(
+                            child: TextFormField(
+                                controller: _weightController,
+                                keyboardType: TextInputType.number,
+                                decoration: _inputDecoration('น้ำหนัก (กก.)',
+                                    Icons.monitor_weight_outlined))),
                       ],
                     ),
                     const SizedBox(height: 16),
 
                     Row(
                       children: [
-                        Expanded(child: TextFormField(controller: _heightController, keyboardType: TextInputType.number, decoration: _inputDecoration('ส่วนสูง (ซม.)', Icons.height))),
+                        Expanded(
+                            child: TextFormField(
+                                controller: _heightController,
+                                keyboardType: TextInputType.number,
+                                decoration: _inputDecoration(
+                                    'ส่วนสูง (ซม.)', Icons.height))),
                         const SizedBox(width: 12),
-                        Expanded(child: TextFormField(controller: _bmiController, readOnly: true, decoration: _inputDecoration('ค่า BMI', Icons.analytics_outlined))),
+                        Expanded(
+                            child: TextFormField(
+                                controller: _bmiController,
+                                readOnly: true,
+                                decoration: _inputDecoration(
+                                    'ค่า BMI', Icons.analytics_outlined))),
                       ],
                     ),
                     const SizedBox(height: 16),
+
+                    // 📍 ---------------- แทรกโค้ดกราฟ BMI ตรงนี้ ---------------- 📍
+                    // ใช้ if และ ...[] (Spread Operator) เพื่อเช็กว่ามีค่า BMI ไหม ถ้ามีถึงจะแสดงกราฟ
+                    if (double.tryParse(_bmiController.text) != null &&
+                        double.parse(_bmiController.text) > 0) ...[
+                      BmiBarChart(bmi: double.parse(_bmiController.text)),
+                      const SizedBox(
+                          height: 16), // เว้นระยะห่างก่อนถึงช่องโรคประจำตัว
+                    ],
+
+                    // 📍 -------------------------------------------------------- 📍
 
                     TextFormField(
                       controller: _diseaseController,
-                      decoration: _inputDecoration('โรคประจำตัว', Icons.medical_services_outlined),
+                      decoration: _inputDecoration(
+                          'โรคประจำตัว', Icons.medical_services_outlined),
                     ),
                     const SizedBox(height: 16),
 
                     // 🚬 3. ช่องสลับสถานะสูบบุหรี่ (เพิ่มใหม่ ให้แก้ไขได้)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: Colors.grey.shade200),
                       ),
                       child: SwitchListTile(
-                        title: const Text('ประวัติการสูบบุหรี่', style: TextStyle(fontWeight: FontWeight.bold, color: slateColor, fontSize: 14)),
+                        title: const Text('ประวัติการสูบบุหรี่',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: slateColor,
+                                fontSize: 14)),
                         subtitle: Text(
-                          _isSmoker ? '🚬 สูบบุหรี่ (มีความเสี่ยงเพิ่มขึ้น)' : '✨ ไม่สูบบุหรี่ / เลิกสูบแล้ว',
-                          style: TextStyle(fontSize: 12, color: _isSmoker ? Colors.red.shade600 : emeraldColor, fontWeight: FontWeight.w600),
+                          _isSmoker
+                              ? '🚬 สูบบุหรี่ (มีความเสี่ยงเพิ่มขึ้น)'
+                              : '✨ ไม่สูบบุหรี่ / เลิกสูบแล้ว',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: _isSmoker
+                                  ? Colors.red.shade600
+                                  : emeraldColor,
+                              fontWeight: FontWeight.w600),
                         ),
-                        secondary: Icon(Icons.smoking_rooms, color: _isSmoker ? Colors.red : emeraldColor),
+                        secondary: Icon(Icons.smoking_rooms,
+                            color: _isSmoker ? Colors.red : emeraldColor),
                         value: _isSmoker,
                         activeColor: Colors.red,
                         onChanged: (val) {
@@ -243,13 +313,19 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: emeraldColor,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                           elevation: 2,
                         ),
                         onPressed: _isSaving ? null : _saveProfile,
                         child: _isSaving
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text('บันทึกข้อมูลโปรไฟล์', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
+                            : const Text('บันทึกข้อมูลโปรไฟล์',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
@@ -265,9 +341,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       prefixIcon: Icon(icon, color: emeraldColor, size: 20),
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade200)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: emeraldColor, width: 1.5)),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.grey.shade200)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: emeraldColor, width: 1.5)),
     );
   }
 
@@ -275,13 +356,15 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   Widget _buildThaiCvdRiskCard() {
     final int age = int.tryParse(_ageController.text) ?? 50;
     final bool hasDiabetes = _diseaseController.text.contains('เบาหวาน');
-    final double? cholesterol = _latestLab != null ? double.tryParse(_latestLab!['total_cholesterol']?.toString() ?? '') : null;
+    final double? cholesterol = _latestLab != null
+        ? double.tryParse(_latestLab!['total_cholesterol']?.toString() ?? '')
+        : null;
     bool hasLabData = cholesterol != null && cholesterol > 0;
 
     // คำนวณความเสี่ยงโดยใช้ ThCvRiskCalculator ตัวจริง (ดึงค่าความดันจริง _latestSystolic และสถานะ _isSmoker)
     final riskResult = ThCvRiskCalculator.calculateRisk(
       age: age,
-      gender: 'female', 
+      gender: 'female',
       isSmoker: _isSmoker,
       hasDiabetes: hasDiabetes,
       systolicBP: _latestSystolic.toDouble(),
@@ -291,7 +374,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
     String riskLevel = riskResult['level'];
     String colorCode = riskResult['color'];
-    
+
     Color riskColor = const Color(0xFF10B981);
     double progressVal = 0.3;
     if (colorCode == 'red') {
@@ -334,25 +417,40 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       color: riskColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.favorite_rounded, color: riskColor, size: 24),
+                    child: Icon(Icons.favorite_rounded,
+                        color: riskColor, size: 24),
                   ),
                   const SizedBox(width: 12),
                   const Text(
                     'ประเมินโรคหัวใจ (Thai CVD Risk)',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: slateColor),
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: slateColor),
                   ),
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: hasLabData ? Colors.teal.shade50 : Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: hasLabData ? Colors.teal.shade200 : Colors.blue.shade200),
+                  border: Border.all(
+                      color: hasLabData
+                          ? Colors.teal.shade200
+                          : Colors.blue.shade200),
                 ),
                 child: Text(
-                  hasLabData ? '✨ มีผลแล็บ (แม่นยำสูง)' : '📋 ไม่มีผลแล็บ (ประเมินเบื้องต้น)',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: hasLabData ? Colors.teal.shade700 : Colors.blue.shade700),
+                  hasLabData
+                      ? '✨ มีผลแล็บ (แม่นยำสูง)'
+                      : '📋 ไม่มีผลแล็บ (ประเมินเบื้องต้น)',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: hasLabData
+                          ? Colors.teal.shade700
+                          : Colors.blue.shade700),
                 ),
               ),
             ],
@@ -361,8 +459,13 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('ระดับความเสี่ยงใน 10 ปีข้างหน้า:', style: TextStyle(color: Colors.grey, fontSize: 13)),
-              Text(riskLevel, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: riskColor)),
+              const Text('ระดับความเสี่ยงใน 10 ปีข้างหน้า:',
+                  style: TextStyle(color: Colors.grey, fontSize: 13)),
+              Text(riskLevel,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: riskColor)),
             ],
           ),
           const SizedBox(height: 10),
@@ -388,7 +491,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 _buildRiskFactor('อายุ', '$age ปี'),
                 _buildRiskFactor('สูบบุหรี่', _isSmoker ? 'สูบ' : 'ไม่สูบ'),
                 _buildRiskFactor('ความดันตัวบน', '$_latestSystolic mmHg'),
-                _buildRiskFactor('ไขมันรวม (TC)', hasLabData ? '${cholesterol.toStringAsFixed(0)} mg%' : 'ยังไม่มีแล็บ'),
+                _buildRiskFactor(
+                    'ไขมันรวม (TC)',
+                    hasLabData
+                        ? '${cholesterol.toStringAsFixed(0)} mg%'
+                        : 'ยังไม่มีแล็บ'),
               ],
             ),
           ),
@@ -402,7 +509,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       children: [
         Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
         const SizedBox(height: 2),
-        Text(val, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: slateColor)),
+        Text(val,
+            style: const TextStyle(
+                fontSize: 12, fontWeight: FontWeight.bold, color: slateColor)),
       ],
     );
   }

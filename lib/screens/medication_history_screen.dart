@@ -28,6 +28,23 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
   static const Color emeraldColor = Color(0xFF10B981);
   static const Color slateColor = Color(0xFF334155);
 
+// 🔴 1. นำฟังก์ชันของคุณมาวางไว้ตรงนี้เลยครับ 🔴
+  TimeOfDay stringToTimeOfDay(String? timeString) {
+    if (timeString == null || !timeString.contains(':')) {
+      return const TimeOfDay(hour: 8, minute: 0); // ค่าเริ่มต้น 08:00
+    }
+    final parts = timeString.split(':');
+    return TimeOfDay(
+      hour: int.tryParse(parts[0]) ?? 8,
+      minute: int.tryParse(parts[1]) ?? 0,
+    );
+  }
+
+  // 🔴 2. ขออนุญาตแถมฟังก์ชันขากลับ (Save) ให้ด้วยครับ ต้องใช้คู่กัน 🔴
+  String timeOfDayToString(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -91,8 +108,8 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
     int mealOffset = mealType == 'morning'
         ? 100000
         : mealType == 'noon'
-        ? 200000
-        : 300000;
+            ? 200000
+            : 300000;
     return (stableHash % 10000) + mealOffset;
   }
 
@@ -288,8 +305,7 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
 
   // 📍 3. ฟังก์ชันลบยา (CRUD - Delete)
   Future<void> _deleteMedication(Map<String, dynamic> med) async {
-    bool confirm =
-        await showDialog(
+    bool confirm = await showDialog(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text(
@@ -328,14 +344,14 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
           '🗑️ กำลังพยายามลบยา ID: $medUuid | ชื่อยา: ${med['medication_name']}',
         );
 
-        // 🚀 1. ลบประวัติการกินยาในตารางลูกก่อน (เพิ่ม timeout ป้องกันแอปค้าง)
+        // 🚀 1. ลบประวัติการกินยาในตารางลูก (คง Query เดิมของ Supabase ไว้ 100%)
         await _supabase
             .from('medication_adherence_logs')
             .delete()
             .eq('medication_id', medUuid)
             .timeout(const Duration(seconds: 5));
 
-        // 🚀 2. ลบรายการยาหลักออกจากตาราง medication_logs
+        // 🚀 2. ลบรายการยาหลักออกจากตาราง (คง Query เดิมของ Supabase ไว้ 100%)
         await _supabase
             .from('medication_logs')
             .delete()
@@ -345,9 +361,9 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
         // 🚀 3. ยกเลิกการแจ้งเตือนทั้งหมด
         for (String meal in ['morning', 'noon', 'evening']) {
           final int baseId = _generateBaseId(medUuid, meal);
-          for (int i = 0; i <= 15; i++) {
-            await NotificationService().cancelAllAlarmsForMeal(baseId + i);
-          }
+          // 🛠️ [Fix]: ถอดลูป 16 รอบออก! เพราะ NotificationService ไปวนลูปข้างในแล้ว
+          // การเรียกครั้งเดียวต่อ 1 มื้อ จะแก้ปัญหาแอปค้าง/หน่วงเวลาลบยาได้หายขาด
+          await NotificationService().cancelAllAlarmsForMeal(baseId);
         }
 
         await _loadMedications();
@@ -361,7 +377,6 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
           );
         }
       } catch (e) {
-        // 🔍 บังคับพิมพ์ Error ทั้งหมดออกทาง Console เพื่อให้เราเห็นสาเหตุที่แท้จริง
         debugPrint('❌ CRITICAL ERROR in deleteMedication: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -395,8 +410,7 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
         timeStr == null ||
         timeStr == 'เลือกเวลา' ||
         timeStr.isEmpty ||
-        !timeStr.contains(':'))
-      return false;
+        !timeStr.contains(':')) return false;
     try {
       final parts = timeStr.split(':');
       if (parts.length < 2) return false;
@@ -416,17 +430,15 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
 
   Future<void> _updateMedicationSettings(Map<String, dynamic> med) async {
     try {
-      await _supabase
-          .from('medication_logs')
-          .update({
-            'is_morning_active': med['is_morning_active'],
-            'time_morning': med['time_morning'],
-            'is_noon_active': med['is_noon_active'],
-            'time_noon': med['time_noon'],
-            'is_evening_active': med['is_evening_active'],
-            'time_evening': med['time_evening'],
-          })
-          .eq('id', med['id']);
+      // (คง Query เดิมของ Supabase ไว้ 100%)
+      await _supabase.from('medication_logs').update({
+        'is_morning_active': med['is_morning_active'],
+        'time_morning': med['time_morning'],
+        'is_noon_active': med['is_noon_active'],
+        'time_noon': med['time_noon'],
+        'is_evening_active': med['is_evening_active'],
+        'time_evening': med['time_evening'],
+      }).eq('id', med['id']);
 
       final now = DateTime.now();
       for (var meal in ['morning', 'noon', 'evening']) {
@@ -446,8 +458,8 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
           String label = meal == 'morning'
               ? 'เช้า'
               : meal == 'noon'
-              ? 'กลางวัน'
-              : 'เย็น';
+                  ? 'กลางวัน'
+                  : 'เย็น';
           await NotificationService().scheduleMedicationWithSnooze(
             baseId: baseId,
             title: '💊 ได้เวลาทานยา ($label)',
@@ -456,14 +468,29 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
           );
         }
       }
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('บันทึกเวลาเตือนสำเร็จ'),
             backgroundColor: emeraldColor,
           ),
         );
-    } catch (e) {}
+      }
+    } catch (e) {
+      // 🛠️ [Fix]: ปลดล็อก catch ที่ว่างเปล่า (Silent Error)
+      // ผู้ป่วย/ระบบจะรู้ตัวทันทีหากตั้งเตือนไม่ได้ (เช่น ยังไม่ให้สิทธิ์อนุญาตแจ้งเตือนใน Android)
+      debugPrint('❌ Error in _updateMedicationSettings: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'เกิดข้อผิดพลาดในการตั้งแจ้งเตือน กรุณาตรวจสอบสิทธิ์ตั้งปลุกในตั้งค่าเครื่อง\n(รายละเอียด: $e)'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _markAsTaken(
@@ -495,51 +522,59 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
         }
       });
 
-      // 🚀 2. ยกเลิกแจ้งเตือนทันทีก่อนคุยกับ DB (ป้องกันเน็ตหลุดแล้วเตือนไม่หยุด)
-      final int baseId = _generateBaseId(medUuid, mealType);
+      // 🚀 2. ยิงบันทึกขึ้น Supabase เป็นอันดับแรก (Data Safety First)
+      // ห่อ try-catch ชั้นนี้ไว้ หาก DB พัง จะได้ไม่ต้องไปลบ Notification
+      try {
+        await _supabase.from('medication_adherence_logs').upsert({
+          'patient_id': patientId,
+          'medication_id': medUuid,
+          'medication_name': med['medication_name'].toString(),
+          'meal_type': mealType,
+          'taken_date': todayDate,
+          'taken_at': now.toUtc().toIso8601String(), // UTC ถูกต้องตาม Schema
+        }, onConflict: 'patient_id, medication_id, meal_type, taken_date');
+      } catch (dbError) {
+        debugPrint('❌ Supabase Upsert Error: $dbError');
+        // หาก Database พัง ให้โหลด log กลับมาใหม่ (Rollback UI) แล้วหยุดทำงาน
+        await _loadAdherenceLogs();
+        if (mounted) setState(() {});
+        return;
+      }
 
-      // แปลงเวลา timeStr ให้เป็น DateTime ของวันนี้
-      final parts = timeStr.split(':');
-      final scheduledTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        int.parse(parts[0]),
-        int.parse(parts[1]),
-      );
-      String mealLabel = mealType == 'morning'
-          ? 'เช้า'
-          : mealType == 'noon'
-          ? 'กลางวัน'
-          : 'เย็น';
+      // 🚀 3. จัดการ Notification ถัดมา (Isolated Task)
+      // ห่อ try-catch แยกไว้ หาก Notification พัง Data ก็ยังถูกบันทึกใน DB ไปแล้ว (ไม่สูญหาย)
+      try {
+        final int baseId = _generateBaseId(medUuid, mealType);
+        final parts = timeStr.split(':');
+        final scheduledTime = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          int.parse(parts[0]),
+          int.parse(parts[1]),
+        );
+        String mealLabel = mealType == 'morning'
+            ? 'เช้า'
+            : mealType == 'noon'
+                ? 'กลางวัน'
+                : 'เย็น';
 
-      // 🚀 ใช้ stopSnoozeForToday แทน cancelAllAlarms เพื่อให้พรุ่งนี้ยังเตือนต่อตรงเวลา
-      await NotificationService().stopSnoozeForToday(
-        baseId: baseId,
-        scheduledTime: scheduledTime,
-        title: '💊 ได้เวลาทานยา ($mealLabel)',
-        body: 'อย่าลืมทานยา: ${med['medication_name']}',
-      );
+        await NotificationService().stopSnoozeForToday(
+          baseId: baseId,
+          scheduledTime: scheduledTime,
+          title: '💊 ได้เวลาทานยา ($mealLabel)',
+          body: 'อย่าลืมทานยา: ${med['medication_name']}',
+        );
+      } catch (notifError, stack) {
+        // แอบกลืน Error ของ Notification ไว้แค่ใน Log ไม่ให้ลามไปทำแอป Crash
+        debugPrint('❌ Notification Lifecycle Error: $notifError\n$stack');
+      }
 
-      // 3. ยิงบันทึกขึ้น Supabase (เพิ่ม taken_at เป็น UTC ให้ครบตาม Schema)
-      await _supabase.from('medication_adherence_logs').upsert({
-        'patient_id': patientId,
-        'medication_id': medUuid,
-        'medication_name': med['medication_name'].toString(),
-        'meal_type': mealType,
-        'taken_date': todayDate,
-        'taken_at': now
-            .toUtc()
-            .toIso8601String(), // 🚀 Fix: ใส่ Timezone UTC เพื่อความแม่นยำ
-      }, onConflict: 'patient_id, medication_id, meal_type, taken_date');
-
+      // 4. โหลดข้อมูล DB เพื่อยืนยันความถูกต้องอีกครั้ง
       await _loadAdherenceLogs();
       if (mounted) setState(() {});
     } catch (e) {
-      debugPrint(
-        '❌ Error in _markAsTaken: $e',
-      ); // 🚀 เพิ่ม Debug เพื่อดักจับ Error ที่ซ่อนอยู่
-      // หากเน็ตพัง อย่างน้อยการแจ้งเตือนถูกระงับไปแล้วใน Step 2
+      debugPrint('❌ Fatal Error in _markAsTaken: $e');
       await _loadAdherenceLogs();
       if (mounted) setState(() {});
     }
@@ -594,110 +629,112 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: emeraldColor))
           : _isProcessingImage
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(color: emeraldColor),
-                  SizedBox(height: 16),
-                  Text(
-                    'กำลังให้ AI วิเคราะห์ฉลากยา...',
-                    style: TextStyle(color: slateColor),
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: emeraldColor),
+                      SizedBox(height: 16),
+                      Text(
+                        'กำลังให้ AI วิเคราะห์ฉลากยา...',
+                        style: TextStyle(color: slateColor),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )
-          : _medications.isEmpty
-          ? const Center(
-              child: Text(
-                'ยังไม่มีรายการยาในระบบ',
-                style: TextStyle(color: Colors.grey),
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _medications.length,
-              itemBuilder: (context, index) {
-                final med = _medications[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.medication_liquid_rounded,
-                              color: emeraldColor,
-                              size: 30,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                med['medication_name'] ?? 'ไม่ทราบชื่อยา',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: slateColor,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.red,
-                              ),
-                              onPressed: () => _deleteMedication(med),
-                            ),
-                          ],
-                        ),
-                        if (med['dosage_instruction'] != null &&
-                            med['dosage_instruction']
-                                .toString()
-                                .isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'วิธีใช้: ${med['dosage_instruction']}',
-                            style: TextStyle(color: Colors.grey.shade700),
+                )
+              : _medications.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'ยังไม่มีรายการยาในระบบ',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _medications.length,
+                      itemBuilder: (context, index) {
+                        final med = _medications[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                        ],
-                        const Divider(height: 24, thickness: 1),
-                        _buildTimeRow(
-                          context,
-                          med,
-                          'เช้า',
-                          'time_morning',
-                          'is_morning_active',
-                          'morning',
-                        ),
-                        _buildTimeRow(
-                          context,
-                          med,
-                          'กลางวัน',
-                          'time_noon',
-                          'is_noon_active',
-                          'noon',
-                        ),
-                        _buildTimeRow(
-                          context,
-                          med,
-                          'เย็น',
-                          'time_evening',
-                          'is_evening_active',
-                          'evening',
-                        ),
-                      ],
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.medication_liquid_rounded,
+                                      color: emeraldColor,
+                                      size: 30,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        med['medication_name'] ??
+                                            'ไม่ทราบชื่อยา',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: slateColor,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.red,
+                                      ),
+                                      onPressed: () => _deleteMedication(med),
+                                    ),
+                                  ],
+                                ),
+                                if (med['dosage_instruction'] != null &&
+                                    med['dosage_instruction']
+                                        .toString()
+                                        .isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'วิธีใช้: ${med['dosage_instruction']}',
+                                    style:
+                                        TextStyle(color: Colors.grey.shade700),
+                                  ),
+                                ],
+                                const Divider(height: 24, thickness: 1),
+                                _buildTimeRow(
+                                  context,
+                                  med,
+                                  'เช้า',
+                                  'time_morning',
+                                  'is_morning_active',
+                                  'morning',
+                                ),
+                                _buildTimeRow(
+                                  context,
+                                  med,
+                                  'กลางวัน',
+                                  'time_noon',
+                                  'is_noon_active',
+                                  'noon',
+                                ),
+                                _buildTimeRow(
+                                  context,
+                                  med,
+                                  'เย็น',
+                                  'time_evening',
+                                  'is_evening_active',
+                                  'evening',
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                );
-              },
-            ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: emeraldColor,
         onPressed: _scanMedication,
@@ -728,15 +765,15 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
 
     Color bgColor = isActive
         ? (isTaken
-              ? emeraldColor.withOpacity(0.1)
-              : (shouldAlert
-                    ? Colors.red.shade50
-                    : emeraldColor.withOpacity(0.1)))
+            ? emeraldColor.withOpacity(0.1)
+            : (shouldAlert
+                ? Colors.red.shade50
+                : emeraldColor.withOpacity(0.1)))
         : Colors.grey.shade100;
     Color textColor = isActive
         ? (isTaken
-              ? emeraldColor
-              : (shouldAlert ? Colors.red.shade700 : emeraldColor))
+            ? emeraldColor
+            : (shouldAlert ? Colors.red.shade700 : emeraldColor))
         : Colors.grey;
 
     return Column(
@@ -759,9 +796,8 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       color: isActive ? slateColor : Colors.grey,
-                      fontWeight: isActive
-                          ? FontWeight.w600
-                          : FontWeight.normal,
+                      fontWeight:
+                          isActive ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ],

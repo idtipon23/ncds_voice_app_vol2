@@ -8,7 +8,7 @@ class PatientProfileService {
   static const String _profileKey = 'patient_profile_data';
   static const String _isRegisteredKey = 'is_registered';
   static const String _onboardedKey = 'is_onboarded';
-  
+
   // 📍 คีย์หลักสำหรับระบบ Smart HN Memory
   static const String _lastHnKey = 'last_used_hn';
   static const String _lastHospitalIdKey = 'last_used_hospital_id';
@@ -33,24 +33,24 @@ class PatientProfileService {
     return profile['id'] != null && hn.isNotEmpty && hospitalId.isNotEmpty;
   }
 
-  /// 📍 ฟังก์ชันดึงโปรไฟล์อัจฉริยะ (ดึงประวัติยาและข้อมูลทันทีหากเครื่องจำ HN ได้)
+  /// 📍 ฟังก์ชันดึงโปรไฟล์อัจฉริยะ 
   Future<Map<String, dynamic>?> validateAndLoadProfile() async {
     final currentUser = _supabase.auth.currentUser;
     final prefs = await SharedPreferences.getInstance();
 
     try {
-      // 1. ระบบAuto lockin ตรวจสอบเบื้องหลังด้วย Auth User ID ก่อน
-      /*
+      // 1. ระบบ Auto login ตรวจสอบเบื้องหลังด้วย Auth User ID ก่อน
       if (currentUser != null) {
         final data = await _supabase
             .from('patients')
             .select()
-            .eq('id', currentUser.id)
+            // 📍 [แก้ไขแล้ว]: เปลี่ยนจาก 'id' เป็น 'auth_user_id'
+            .eq('auth_user_id', currentUser.id) 
             .maybeSingle();
 
         if (data != null && isProfileComplete(data)) {
           await _saveSmartMemory(
-            patientId: currentUser.id,
+            patientId: data['id'].toString(), // 📍 ใช้ 'id' (Primary Key) ในการเซฟลงเครื่องตามปกติ
             hn: data['hn'].toString(),
             hospitalId: data['hospital_id'].toString(),
             profileData: data,
@@ -58,13 +58,15 @@ class PatientProfileService {
           return data;
         }
       }
-      */
 
-      // 2. 🚀 ดึงจาก Smart HN Memory ในเครื่องทันที! (ทำให้ไม่ต้องลงทะเบียน HN ใหม่)
+      // 2. 🚀 ดึงจาก Smart HN Memory ในเครื่องทันที! (กรณีตกหล่น)
       final cachedHn = prefs.getString(_lastHnKey);
       final cachedHospitalId = prefs.getString(_lastHospitalIdKey);
 
-      if (cachedHn != null && cachedHn.isNotEmpty && cachedHospitalId != null && cachedHospitalId.isNotEmpty) {
+      if (cachedHn != null &&
+          cachedHn.isNotEmpty &&
+          cachedHospitalId != null &&
+          cachedHospitalId.isNotEmpty) {
         final cachedData = await _supabase
             .from('patients')
             .select()
@@ -90,7 +92,7 @@ class PatientProfileService {
         return cachedProfile;
       }
 
-      return null; // จะส่งไปหน้าลงทะเบียนเฉพาะเคสที่ไม่เคยมี HN ในระบบจริง ๆ เท่านั้น
+      return null; 
     } catch (e) {
       debugPrint('⚠️ Error validating profile: $e');
       return await getProfile();
@@ -128,7 +130,7 @@ class PatientProfileService {
   Future<void> updateLocalProfile(Map<String, dynamic> newData) async {
     final prefs = await SharedPreferences.getInstance();
     final currentProfile = await getProfile() ?? {};
-    
+
     currentProfile.addAll(newData);
     await prefs.setString(_profileKey, jsonEncode(currentProfile));
 
@@ -136,16 +138,41 @@ class PatientProfileService {
     if (patientId != null && patientId.isNotEmpty) {
       try {
         final Map<String, dynamic> updatePayload = {};
+
+        // 📍 [แก้ไขแล้ว] รองรับ Key ทั้งแบบเก่าและแบบที่ตรงกับ Database 100%
         if (newData.containsKey('age')) updatePayload['age'] = newData['age'];
-        if (newData.containsKey('weight')) updatePayload['weight'] = newData['weight'];
-        if (newData.containsKey('height')) updatePayload['height'] = newData['height'];
-        if (newData.containsKey('diseases')) updatePayload['underlying_diseases'] = newData['diseases'];
-        if (newData.containsKey('takesMedication')) updatePayload['takes_medication'] = newData['takesMedication'];
-        if (newData.containsKey('smokes')) updatePayload['smokes'] = newData['smokes'];
-        if (newData.containsKey('drinksAlcohol')) updatePayload['drinks_alcohol'] = newData['drinksAlcohol'];
+
+        // จัดการน้ำหนัก
+        if (newData.containsKey('weight_kg'))
+          updatePayload['weight_kg'] = newData['weight_kg'];
+        else if (newData.containsKey('weight'))
+          updatePayload['weight_kg'] = newData['weight'];
+
+        // จัดการส่วนสูง
+        if (newData.containsKey('height_cm'))
+          updatePayload['height_cm'] = newData['height_cm'];
+        else if (newData.containsKey('height'))
+          updatePayload['height_cm'] = newData['height'];
+
+        // 📍 เพิ่มการรับค่า BMI เพื่อส่งขึ้น Supabase
+        if (newData.containsKey('bmi')) updatePayload['bmi'] = newData['bmi'];
+
+        // จัดการข้อมูลโรคประจำตัวและวิถีชีวิต
+        if (newData.containsKey('underlying_diseases'))
+          updatePayload['underlying_diseases'] = newData['underlying_diseases'];
+        else if (newData.containsKey('diseases'))
+          updatePayload['underlying_diseases'] = newData['diseases'];
+
+        if (newData.containsKey('takes_medication'))
+          updatePayload['takes_medication'] = newData['takes_medication'];
+        else if (newData.containsKey('takesMedication'))
+          updatePayload['takes_medication'] = newData['takesMedication'];
 
         if (updatePayload.isNotEmpty) {
-          await _supabase.from('patients').update(updatePayload).eq('id', patientId);
+          await _supabase
+              .from('patients')
+              .update(updatePayload)
+              .eq('id', patientId);
         }
       } catch (e) {
         debugPrint('⚠️ Error Syncing to Supabase: $e');
@@ -153,7 +180,8 @@ class PatientProfileService {
     }
   }
 
-  Future<void> updateProfileData(Map<String, dynamic> newData) async => updateLocalProfile(newData);
+  Future<void> updateProfileData(Map<String, dynamic> newData) async =>
+      updateLocalProfile(newData);
 
   Future<Map<String, dynamic>?> getProfile() async {
     final prefs = await SharedPreferences.getInstance();
@@ -182,14 +210,15 @@ class PatientProfileService {
           // 3. 📍 เซฟข้อมูลกลับลงเครื่องแบบเนียนๆ (Self-Healing)
           await prefs.setString(_profileKey, jsonEncode(response));
           await prefs.setString(_patientIdKey, patientId);
-          
+
           if (response['hn'] != null) {
             await prefs.setString(_lastHnKey, response['hn'].toString());
           }
           if (response['hospital_id'] != null) {
-            await prefs.setString(_lastHospitalIdKey, response['hospital_id'].toString());
+            await prefs.setString(
+                _lastHospitalIdKey, response['hospital_id'].toString());
           }
-          
+
           debugPrint('✅ กู้คืนโปรไฟล์ผู้ป่วยและ HN สำเร็จ!');
           return response;
         }
@@ -236,32 +265,62 @@ class PatientProfileService {
 
   Future<void> fullLogout() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // 🛠️ [Fix]: สำรองข้อมูล Smart HN Memory ไว้ก่อน
+    final List<String>? savedHnHistory =
+        prefs.getStringList('saved_hn_history');
+
+    // กวาดล้างข้อมูล Session เก่าทิ้ง
     await prefs.clear();
+
+    // 🚀 เขียน Smart HN Memory กลับเข้าไปใหม่ให้ผู้สูงอายุใช้งานต่อได้
+    if (savedHnHistory != null && savedHnHistory.isNotEmpty) {
+      await prefs.setStringList('saved_hn_history', savedHnHistory);
+    }
+
+    // สั่ง Logout ออกจาก Supabase
     await _supabase.auth.signOut();
   }
+
   /// 📍 บันทึกข้อมูลโปรไฟล์และ Smart HN ลงความจำเครื่อง
   Future<void> saveProfile(Map<String, dynamic> profileData) async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     // 1. บันทึก ID ผู้ป่วย (Patient UUID)
     if (profileData['id'] != null) {
       await prefs.setString(_patientIdKey, profileData['id'].toString());
     }
-    
+
     // 2. บันทึก Smart HN Memory (จำรหัสเพื่อ Auto-fill ครั้งหน้า)
     if (profileData['hn'] != null) {
       await prefs.setString(_lastHnKey, profileData['hn'].toString());
     }
     if (profileData['hospital_id'] != null) {
-      await prefs.setString(_lastHospitalIdKey, profileData['hospital_id'].toString());
+      await prefs.setString(
+          _lastHospitalIdKey, profileData['hospital_id'].toString());
     }
-    
+
     // 3. บันทึกข้อมูล Profile ทั้งหมดเป็น JSON
     await prefs.setString(_profileKey, jsonEncode(profileData));
-    
+
     // 4. อัปเดตสถานะว่าเข้าสู่ระบบและลงทะเบียนแล้ว
     await prefs.setBool(_isRegisteredKey, true);
     await prefs.setBool(_onboardedKey, true);
+  }
+  /// ตรวจสอบว่า Patient ID นี้ยังมีอยู่ในฐานข้อมูลจริงหรือไม่ (คืนค่า true/false)
+  Future<bool> verifySessionInDatabase(String patientId) async {
+    try {
+      final data = await _supabase
+          .from('patients')
+          .select('id')
+          .eq('id', patientId)
+          .maybeSingle();
+      
+      return data != null;
+    } catch (e) {
+      debugPrint('❌ Error verifying session in database: $e');
+      return false;
+    }
   }
 
 }

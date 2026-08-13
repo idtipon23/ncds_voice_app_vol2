@@ -52,7 +52,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
         return;
       }
 
-      // ดึงข้อมูลสัญญาณชีพตาม Filter[cite: 6]
+      // ดึงข้อมูลสัญญาณชีพตาม Filter
       List<Map<String, dynamic>> vitals = [];
       switch (_selectedFilter) {
         case DateRangeFilter.last7Days:
@@ -66,9 +66,8 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
           break;
       }
 
-      // ดึงประวัติผลแล็บ[cite: 6]
+      // ดึงประวัติผลแล็บ
       final labs = await _dbService.getLabResults(patientId);
-
       setState(() {
         _vitalHistory = vitals;
         _labHistory = labs;
@@ -93,7 +92,6 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
       final weight = profile?['weight'];
       final height = profile?['height'];
       final diseases = profile?['underlying_diseases'];
-
       String filterText = '7 วันย้อนหลัง';
       if (_selectedFilter == DateRangeFilter.last1Month) filterText = '1 เดือนย้อนหลัง';
       if (_selectedFilter == DateRangeFilter.last3Months) filterText = '3 เดือนย้อนหลัง';
@@ -105,11 +103,10 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
         weight: weight,
         height: height,
         underlyingDiseases: diseases,
-        hospitalName: 'โรงพยาบาลส่งเสริมสุขภาพตำบล',
+        hospitalName: "hospitalName",
         filterTitle: filterText,
         vitalHistory: _vitalHistory,
       );
-
       await Printing.layoutPdf(
         onLayout: (format) async => pdfBytes,
         name: 'Health_Report_$hn.pdf',
@@ -178,7 +175,6 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
       ),
       body: Column(
         children: [
-          // Tab Switcher & Filters
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -211,23 +207,22 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                     ),
                   ],
                 ),
-                if (_currentTab == DisplayTab.vitals) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildFilterChip('7 วันล่าสุด', DateRangeFilter.last7Days),
-                      _buildFilterChip('1 เดือนล่าสุด', DateRangeFilter.last1Month),
-                      _buildFilterChip('3 เดือนล่าสุด', DateRangeFilter.last3Months),
-                    ],
-                  ),
-                ],
+                if (_currentTab == DisplayTab.vitals) 
+                  ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildFilterChip('7 วันล่าสุด', DateRangeFilter.last7Days),
+                        _buildFilterChip('1 เดือนล่าสุด', DateRangeFilter.last1Month),
+                        _buildFilterChip('3 เดือนล่าสุด', DateRangeFilter.last3Months),
+                      ],
+                    ),
+                  ],
               ],
             ),
           ),
           const Divider(height: 1),
-
-          // Content Area
           Expanded(
             child: _buildMainContent(),
           ),
@@ -285,7 +280,6 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
         return const Center(child: Text('ไม่พบประวัติค่าวัดสัญญาณชีพในช่วงเวลานี้', style: TextStyle(color: Colors.grey)));
       }
 
-      // คำนวณค่าเฉลี่ยจากข้อมูลจริง[cite: 6]
       double avgSys = 0;
       double avgDia = 0;
       double avgPulse = 0;
@@ -318,15 +312,18 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
           final int? sys = (item['systolic'] as num?)?.toInt();
           final int? dia = (item['diastolic'] as num?)?.toInt();
           final int? pulse = (item['pulse'] as num?)?.toInt();
-          final double? fbs = (item['fbs'] as num?)?.toDouble();
-          final double? waist = (item['waist_cm'] as num?)?.toDouble();
 
           final String recordedAt = item['recorded_at']?.toString().substring(0, 16).replaceAll('T', ' ') ?? '';
           final String urgency = item['urgency_level']?.toString() ?? 'NORMAL';
 
           Color statusColor = emeraldColor;
-          if (urgency == 'ELEVATED') statusColor = Colors.orange;
-          if (urgency == 'CRITICAL') statusColor = Colors.redAccent;
+          if (urgency == 'YELLOW' || urgency == 'MODERATE') {
+            statusColor = Colors.amber.shade700;
+          } else if (urgency == 'ELEVATED' || urgency == 'HIGH') {
+            statusColor = Colors.orange;
+          } else if (urgency == 'CRITICAL') {
+            statusColor = Colors.redAccent;
+          }
 
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
@@ -356,20 +353,6 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                       Text('ชีพจร: ${pulse ?? '-'} bpm', style: const TextStyle(fontSize: 14, color: Colors.grey)),
                     ],
                   ),
-                  if ((fbs != null && fbs > 0) || (waist != null && waist > 0)) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (fbs != null && fbs > 0) Text('น้ำตาล (FBS): ${fbs.toStringAsFixed(1)} mg/dL', style: const TextStyle(fontSize: 13, color: Colors.teal)),
-                        if (waist != null && waist > 0) Text('รอบเอว: ${waist.toStringAsFixed(1)} ซม.', style: const TextStyle(fontSize: 13, color: Colors.blueGrey)),
-                      ],
-                    ),
-                  ],
-                  if (item['spoken_feedback'] != null && item['spoken_feedback'].toString().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text('คำแนะนำ: ${item['spoken_feedback']}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontStyle: FontStyle.italic)),
-                  ],
                 ],
               ),
             ),
@@ -438,12 +421,11 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     }
   }
 
-  // 🎨 การ์ดสรุปค่าเฉลี่ยและกราฟพรีเมียม (สีแถบ Bar Chart เปลี่ยนตามความดันจริง)
   Widget _buildPremiumGradientSummaryCard(double avgSys, double avgDia, double avgPulse) {
     String title = 'ภาพรวมความดัน 7 วันล่าสุด';
     if (_selectedFilter == DateRangeFilter.last1Month) title = 'ภาพรวมความดัน 1 เดือนล่าสุด';
     if (_selectedFilter == DateRangeFilter.last3Months) title = 'ภาพรวมความดัน 3 เดือนล่าสุด';
-
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       width: double.infinity,
@@ -516,7 +498,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
           ),
           const SizedBox(height: 20),
           
-          // 📊 บาร์ชาร์ตพรีเมียม (สีแท่งเปลี่ยนตามความดันจริงแต่ละครั้ง)
+          // บาร์ชาร์ตพรีเมียม (ปรับสีความคมชัดสูง แยกตามระดับค่าความดันจริงอย่างชัดเจน)
           Container(
             height: 90,
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -527,12 +509,18 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                 final sysVal = (item['systolic'] as num?)?.toDouble() ?? 120;
                 double factor = (sysVal / 180.0).clamp(0.2, 1.0);
                 
-                // 🎨 กำหนดสีแถบตามค่า Systolic จริง
-                Color barColor = Colors.white; // ปกติ
-                if (sysVal >= 160) {
-                  barColor = const Color(0xFFFEE2E2); // แดงอ่อนพรีเมียม
+                // กำหนดสีและคอนทราสต์แถบ Bar ให้ชัดเจนแยกตามระดับความดัน (ต่ำ, ปกติ, สูง, วิกฤต)
+                Color barColor = Colors.white;
+                if (sysVal < 90) {
+                  barColor = const Color(0xFF93C5FD); // สีฟ้า (ความดันต่ำ)
+                } else if (sysVal >= 160) {
+                  barColor = const Color(0xFFEF4444); // สีแดงสด (วิกฤต)
                 } else if (sysVal >= 140) {
-                  barColor = const Color(0xFFFEF3C7); // ส้ม/เหลืองอ่อนพรีเมียม
+                  barColor = const Color(0xFFF59E0B); // สีส้ม (สูง)
+                } else if (sysVal >= 120) {
+                  barColor = const Color(0xFFFDE047); // สีเหลืองสด (สูงกว่าปกติ)
+                } else {
+                  barColor = Colors.white; // สีขาว (ปกติ)
                 }
 
                 return _buildBarItem(factor, barColor);
@@ -588,7 +576,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
               borderRadius: BorderRadius.circular(6),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
+                  color: Colors.black.withOpacity(0.25),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),

@@ -336,7 +336,7 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
     final sys = healthData['systolic'];
     final dia = healthData['diastolic'];
     final urgency = healthData['urgency_level'];
-    final feedback = healthData['spoken_feedback'];
+    final feedback = healthData['spoken_feedback']; //**** */
     final symptoms = healthData['symptoms'];
 
     final sysInt =
@@ -400,6 +400,12 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
         );
       }
       return;
+    }
+// 📍 [แก้บั๊กที่ 2]: ย้ายคำสั่งเสียงมาไว้ตรงนี้!
+    // ทันทีที่ข้อมูลถูกตรวจสอบว่าไม่เกินโควต้า ให้ AI พูดคำแนะนำทันที
+    // ไม่ว่าหลังจากนี้จะเป็นความดันปกติ หรือวิกฤต AI ก็จะได้พูดเสมอ
+    if (feedback != null && feedback.toString().isNotEmpty) {
+      _voiceService.speakFeedback(feedback.toString());
     }
 
     // ด่านที่ 2: บังคับพัก 3 นาที
@@ -470,46 +476,34 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
       }
     }
 
-    // 🛠️ [Fix]: หยุดเสียงคำแนะนำเบื้องต้นของหน้าจอนี้ เพื่อไม่ให้เสียงตีกันกับ Feedback ของ AI
-    if (_isPlayingAdvice) {
-      await _flutterTts.stop();
-      if (mounted) setState(() => _isPlayingAdvice = false);
-    }
-
-    // ด่านที่ 3: ดักความดันตก/ความดันวิกฤต พร้อมสั่งให้ AI พูดแจ้งเตือน
+    // ด่านที่ 3: ดักความดันตก/ความดันวิกฤต
     if (sysInt < 90 || diaInt < 60) {
-      final speakText = feedback?.toString() ?? 'ความดันโลหิตต่ำกว่าปกติ';
-      _voiceService.speakFeedback(speakText);
       await _showHypotensionAlert(
           patientId: patientId,
           sys: sysInt,
           dia: diaInt,
-          spokenFeedback: speakText,
+          spokenFeedback: feedback?.toString() ?? 'ความดันโลหิตต่ำกว่าปกติ',
           healthData: healthData);
       return;
     }
 
     if (urgency == 'CRISIS' || sysInt >= 180 || diaInt >= 110) {
-      final speakText = feedback?.toString() ?? 'ความดันโลหิตสูงระดับวิกฤต';
-      _voiceService.speakFeedback(speakText);
       await _handleEmergencyAlert(
           patientId: patientId,
           sys: sysInt,
           dia: diaInt,
-          spokenFeedback: speakText,
+          spokenFeedback: feedback?.toString() ?? 'ความดันโลหิตสูงระดับวิกฤต',
           symptoms: symptoms is List ? symptoms : null);
       return;
-    }
-
-    // 🛠️ [Fix]: กรณีปกติ หรือ Warning ให้ AI อ่าน feedback ที่ถอดค่ามาได้
-    if (feedback != null && feedback.toString().isNotEmpty) {
-      _voiceService.speakFeedback(feedback.toString());
     }
 
     _showSaveConfirmation(healthData);
   }
 
   Future<void> _processVoice(String text) async {
+    // 📍 [แก้บั๊กที่ 1]: สั่งปิดไมค์และคืน Audio Focus ให้ระบบทันที
+    // เพื่อให้ลำโพง (TTS) ว่างและพร้อมสำหรับการเล่นเสียง AI
+    await _speech.stop();
     setState(() {
       _isListening = false;
       _isProcessing = true;
@@ -579,38 +573,20 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
             await _dbService.uploadHealthImage(_imageFile!, patientId);
       }
 
-      // 🛠️ [Fix]: Type Casting ป้องกัน Type Mismatch จาก String ให้เป็น int 100%
-      final int sys = data['systolic'] is int
-          ? data['systolic']
-          : int.tryParse(data['systolic']?.toString() ?? '0') ?? 0;
-      final int dia = data['diastolic'] is int
-          ? data['diastolic']
-          : int.tryParse(data['diastolic']?.toString() ?? '0') ?? 0;
-      final int? pulse = data['pulse'] is int
-          ? data['pulse']
-          : int.tryParse(data['pulse']?.toString() ?? '');
-
       await _dbService.saveVitalSigns(
         patientId: patientId,
-        systolic: sys,
-        diastolic: dia,
-        pulse: pulse,
-        spokenFeedback: data['spoken_feedback']?.toString(),
-        urgencyLevel: data['urgency_level']?.toString(),
+        systolic: data['systolic'] ?? 0,
+        diastolic: data['diastolic'] ?? 0,
+        pulse: data['pulse'],
+        spokenFeedback: data['spoken_feedback'],
+        urgencyLevel: data['urgency_level'],
         imageUrl: uploadedUrl,
       );
 
-      // 🛠️ [Fix]: Type Casting สำหรับการคำนวณ BMI
-      double? weight = data['weight_kg'] is double
-          ? data['weight_kg']
-          : double.tryParse(data['weight_kg']?.toString() ??
-              data['weight']?.toString() ??
-              '');
-      double? height = data['height_cm'] is double
-          ? data['height_cm']
-          : double.tryParse(data['height_cm']?.toString() ??
-              data['height']?.toString() ??
-              '');
+      double? weight = data['weight_kg'] ??
+          double.tryParse(data['weight']?.toString() ?? '');
+      double? height = data['height_cm'] ??
+          double.tryParse(data['height']?.toString() ?? '');
       String? disease = data['underlying_diseases']?.toString();
 
       double? bmi;

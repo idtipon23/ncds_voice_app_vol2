@@ -35,6 +35,18 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            
+            // 🔴 1. เพิ่มบรรทัดนี้ เพื่อเปิดระบบย่อขนาดโค้ด (ช่วยลดขนาดแอป)
+            isMinifyEnabled = true
+            
+            // 🔴 2. เพิ่มบรรทัดนี้ เพื่อลดขนาดทรัพยากร (รูป/ไฟล์ ที่ไม่ได้ใช้)
+            isShrinkResources = true
+            
+            // 🔴 3. เพิ่มบรรทัดนี้ เพื่อสั่งให้ระบบไปอ่านกฎป้องกันการลบโค้ดจากไฟล์ proguard-rules.pro
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
