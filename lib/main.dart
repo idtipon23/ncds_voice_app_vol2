@@ -5,14 +5,17 @@ import 'screens/home_screen.dart';
 import 'screens/login_page.dart';
 import 'services/patient_profile_service.dart';
 import 'package:ncds_voice_app_vol1/services/notification_service.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import 'screens/medication_history_screen.dart';
 import 'services/auth/auth_service.dart';
+const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+const String lineChannelId = String.fromEnvironment('LINE_CHANNEL_ID');
+const String liffId = String.fromEnvironment('LIFF_ID');
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await dotenv.load(fileName: ".env");
+  WidgetsFlutterBinding.ensureInitialized();  
+  
   
   // 1. เปิดใช้งานระบบแจ้งเตือนกินยา
   try {
@@ -23,16 +26,17 @@ void main() async {
 
   // 2. ตั้งค่า Supabase
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
-  );
+  url: supabaseUrl,
+  anonKey: supabaseAnonKey,
+);
 
   // 📍 3. ตั้งค่า LINE SDK (Mobile) หรือ LINE LIFF (Web) อัตโนมัติตามสภาพแวดล้อม
   try {
-    await getAuthService().initLineSdk(
-      channelId: dotenv.env['LINE_CHANNEL_ID'],
-      liffId: dotenv.env['LIFF_ID'],
-    );
+    // LINE / LIFF
+await getAuthService().initLineSdk(
+  channelId: lineChannelId,
+  liffId: liffId,
+);
   } catch (e) {
     debugPrint('❌ LINE/LIFF SDK Setup Error: $e');
   }
