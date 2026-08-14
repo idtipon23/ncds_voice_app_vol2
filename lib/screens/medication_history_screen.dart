@@ -404,29 +404,52 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
     );
   }
 
-  bool _isTimeToAlert(String? timeStr, bool isActive, bool isTaken) {
-    if (!isActive ||
-        isTaken ||
-        timeStr == null ||
-        timeStr == 'เลือกเวลา' ||
-        timeStr.isEmpty ||
-        !timeStr.contains(':')) return false;
+  bool _isTimeToAlert(
+  String? timeStr, 
+  bool isActive, 
+  bool isTaken, {
+  dynamic createdAt,
+}) {
+  // 1. ถ้าปิดการแจ้งเตือน, กินยาแล้ว, หรือไม่มีการตั้งเวลา -> ไม่เตือน
+  if (!isActive || isTaken || timeStr == null || !timeStr.contains(':')) {
+    return false;
+  }
+
+  final DateTime now = DateTime.now();
+  final parts = timeStr.split(':');
+  final DateTime scheduledTime = DateTime(
+    now.year,
+    now.month,
+    now.day,
+    int.parse(parts[0]),
+    int.parse(parts[1]),
+  );
+
+  // 2. ถ้าเวลาปัจจุบันยังไม่ถึงเวลากินยา -> ไม่เตือน
+  if (now.isBefore(scheduledTime)) {
+    return false;
+  }
+
+  // 3. 🎯 [จุดแก้ไข] เช็กกรณีเพิ่งเพิ่มยาในวันนี้ หลังจากเลยเวลากินมื้อนั้นไปแล้ว
+  if (createdAt != null) {
     try {
-      final parts = timeStr.split(':');
-      if (parts.length < 2) return false;
-      final targetTime = DateTime(
-        DateTime.now().year,
-        DateTime.now().month,
-        DateTime.now().day,
-        int.parse(parts[0]),
-        int.parse(parts[1]),
-      );
-      return DateTime.now().isAfter(targetTime) ||
-          DateTime.now().isAtSameMomentAs(targetTime);
+      final DateTime createdDateTime = DateTime.parse(createdAt.toString()).toLocal();
+      
+      // ถ้าเพิ่งสร้าง "วันนี้" และ เวลาที่สร้าง "อยู่หลัง" เวลากินยาของมื้อนี้
+      if (createdDateTime.year == now.year &&
+          createdDateTime.month == now.month &&
+          createdDateTime.day == now.day &&
+          createdDateTime.isAfter(scheduledTime)) {
+        return false; // 🟢 ไม่ต้องขึ้นสีแดงย้อนหลัง ให้คงเป็นสีเขียว/ปกติไว้
+      }
     } catch (e) {
-      return false;
+      debugPrint('Error parsing created_at in _isTimeToAlert: $e');
     }
   }
+
+  // 4. ถ้าเลยเวลาแล้ว และยาตัวนี้ถูกเพิ่มมาก่อนถึงเวลากิน -> เตือนสีแดง
+  return true;
+}
 
   Future<void> _updateMedicationSettings(Map<String, dynamic> med) async {
     try {
@@ -734,15 +757,43 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
                           ),
                         );
                       },
-                    ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: emeraldColor,
-        onPressed: _scanMedication,
-        icon: const Icon(Icons.camera_alt, color: Colors.white),
-        label: const Text(
-          'ถ่ายรูปฉลากยา',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+                    ), 
+  floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // 📍 ปุ่มเสริม: เพิ่มยาแบบพิมพ์เอง (Manual)
+          FloatingActionButton.extended(
+            heroTag: 'btn_manual_add_med',
+            backgroundColor: Colors.white,
+            elevation: 2,
+            onPressed: () => _showAddMedicationDialog(context),
+            icon: const Icon(Icons.edit_note_rounded, color: emeraldColor),
+            label: const Text(
+              'พิมพ์เพิ่มเอง',
+              style: TextStyle(
+                color: emeraldColor, 
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12), // เว้นระยะห่างระหว่างสองปุ่ม
+
+          // 📍 ปุ่มหลัก: ถ่ายรูปฉลากยา (ของเดิม)
+          FloatingActionButton.extended(
+            heroTag: 'btn_camera_add_med',
+            backgroundColor: emeraldColor,
+            elevation: 2,
+            onPressed: _scanMedication,
+            icon: const Icon(Icons.camera_alt, color: Colors.white),
+            label: const Text(
+              'ถ่ายรูปฉลากยา',
+              style: TextStyle(
+                color: Colors.white, 
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -761,7 +812,12 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
       med['id'].toString(),
       mealType,
     );
-    final bool shouldAlert = _isTimeToAlert(med[timeKey], isActive, isTaken);
+    final bool shouldAlert = _isTimeToAlert(
+      med[timeKey], 
+      isActive, 
+      isTaken, 
+      createdAt: med['created_at'],
+    );
 
     Color bgColor = isActive
         ? (isTaken
@@ -894,5 +950,204 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
         const SizedBox(height: 8),
       ],
     );
+  }
+  // 1. ฟังก์ชันแสดง Dialog ฟอร์มกรอกข้อมูลยา Manual
+  Future<void> _showAddMedicationDialog(BuildContext context) async {
+    final nameController = TextEditingController();
+    final dosageController = TextEditingController();
+
+    TimeOfDay morningTime = const TimeOfDay(hour: 8, minute: 0);
+    TimeOfDay noonTime = const TimeOfDay(hour: 12, minute: 0);
+    TimeOfDay eveningTime = const TimeOfDay(hour: 17, minute: 0);
+
+    bool isMorningActive = true;
+    bool isNoonActive = false;
+    bool isEveningActive = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            String formatTime(TimeOfDay time) {
+              return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: const [
+                  Icon(Icons.medication, color: emeraldColor),
+                  SizedBox(width: 8),
+                  Text('เพิ่มยาใหม่ (Manual)', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'ชื่อยา *',
+                        hintText: 'เช่น พาราเซตามอล 500mg',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: dosageController,
+                      decoration: const InputDecoration(
+                        labelText: 'วิธีรับประทาน / คำแนะนำ',
+                        hintText: 'เช่น รับประทานครั้งละ 1 เม็ด หลังอาหาร',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'ตั้งเวลารับประทานยา:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      title: Text('เช้า (${formatTime(morningTime)})'),
+                      value: isMorningActive,
+                      activeColor: emeraldColor,
+                      onChanged: (val) => setDialogState(() => isMorningActive = val ?? false),
+                      secondary: IconButton(
+                        icon: const Icon(Icons.access_time),
+                        onPressed: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: morningTime,
+                          );
+                          if (picked != null) setDialogState(() => morningTime = picked);
+                        },
+                      ),
+                    ),
+                    CheckboxListTile(
+                      title: Text('กลางวัน (${formatTime(noonTime)})'),
+                      value: isNoonActive,
+                      activeColor: emeraldColor,
+                      onChanged: (val) => setDialogState(() => isNoonActive = val ?? false),
+                      secondary: IconButton(
+                        icon: const Icon(Icons.access_time),
+                        onPressed: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: noonTime,
+                          );
+                          if (picked != null) setDialogState(() => noonTime = picked);
+                        },
+                      ),
+                    ),
+                    CheckboxListTile(
+                      title: Text('เย็น (${formatTime(eveningTime)})'),
+                      value: isEveningActive,
+                      activeColor: emeraldColor,
+                      onChanged: (val) => setDialogState(() => isEveningActive = val ?? false),
+                      secondary: IconButton(
+                        icon: const Icon(Icons.access_time),
+                        onPressed: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: eveningTime,
+                          );
+                          if (picked != null) setDialogState(() => eveningTime = picked);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: emeraldColor),
+                  onPressed: () async {
+                    if (nameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('กรุณากรอกชื่อยา')),
+                      );
+                      return;
+                    }
+
+                    await _saveManualMedication(
+                      name: nameController.text.trim(),
+                      dosage: dosageController.text.trim(),
+                      timeMorning: formatTime(morningTime),
+                      isMorningActive: isMorningActive,
+                      timeNoon: formatTime(noonTime),
+                      isNoonActive: isNoonActive,
+                      timeEvening: formatTime(eveningTime),
+                      isEveningActive: isEveningActive,
+                    );
+
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text('บันทึก', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // 2. ฟังก์ชันบันทึกข้อมูลยกลง Supabase
+  Future<void> _saveManualMedication({
+    required String name,
+    required String dosage,
+    required String timeMorning,
+    required bool isMorningActive,
+    required String timeNoon,
+    required bool isNoonActive,
+    required String timeEvening,
+    required bool isEveningActive,
+  }) async {
+    try {
+      final patientId = await _profileService.getCurrentPatientId();
+      if (patientId == null) throw Exception('ไม่พบรหัสผู้ป่วย');
+
+      await _supabase.from('medications').insert({
+        'patient_id': patientId,
+        'medication_name': name,
+        'dosage_instruction': dosage,
+        'time_morning': timeMorning,
+        'is_morning_active': isMorningActive,
+        'time_noon': timeNoon,
+        'is_noon_active': isNoonActive,
+        'time_evening': timeEvening,
+        'is_evening_active': isEveningActive,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      if (mounted) {
+        await _loadMedications(); 
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เพิ่มข้อมูลยาเรียบร้อยแล้ว'),
+            backgroundColor: emeraldColor,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error saving manual medication: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการบันทึกยา: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
