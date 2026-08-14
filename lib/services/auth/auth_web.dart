@@ -1,12 +1,13 @@
-import 'dart:js' as js; // 📍 นำเข้า dart:js สำหรับคุยกับ JavaScript (LIFF SDK)
+// ignore_for_file: avoid_web_libraries_in_flutter
+
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_interface.dart';
 
 class AuthServiceImpl implements AuthStrategy {
   final SupabaseClient _supabase = Supabase.instance.client;
-  
-  // 📍 ตัวแปรเก็บสถานะว่า LIFF พร้อมใช้งานหรือยัง
   bool _isLiffInitialized = false;
 
   @override
@@ -17,17 +18,23 @@ class AuthServiceImpl implements AuthStrategy {
       }
 
       debugPrint('🌐 [WEB] กำลัง Initialize LINE LIFF...');
-      
-      // 📍 เรียกใช้คำสั่ง liff.init() ฝั่ง JavaScript โดยส่ง liffId ที่ได้จาก .env
-      final promise = js.context['liff'].callMethod('init', [
-        js.JsObject.jsify({'liffId': liffId})
-      ]);
-      
-      // รอให้ LIFF Init เสร็จ
-      await js.context['Promise'].callMethod('resolve', [promise]);
+
+      // ตรวจสอบว่าใน index.html โหลด LIFF SDK เข้ามาหรือยัง
+      if (!globalContext.has('liff')) {
+        throw Exception(
+            'ไม่พบ LINE LIFF SDK กรุณาตรวจสอบว่ามี <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script> ใน web/index.html หรือไม่');
+      }
+
+      final liff = globalContext['liff'] as JSObject;
+      final config = JSObject();
+      config['liffId'] = liffId.toJS;
+
+      // เรียก liff.init() และแปลง JS Promise เป็น Dart Future ด้วยมาตรฐาน js_interop
+      final initPromise = liff.callMethod<JSPromise>('init'.toJS, config);
+      await initPromise.toDart;
+
       _isLiffInitialized = true;
       debugPrint('✅ [WEB] LINE LIFF Initialized สำเร็จ!');
-      
     } catch (e) {
       debugPrint('❌ [WEB] LINE LIFF Init Error: $e');
     }
@@ -42,26 +49,28 @@ class AuthServiceImpl implements AuthStrategy {
 
       debugPrint('🌐 [WEB] กำลังเข้าสู่ระบบผ่าน LIFF...');
 
-      // 📍 1. เช็กว่าผู้ใช้ล็อกอินผ่าน LINE (ในเบราว์เซอร์หรือแอป LINE) หรือยัง
-      final isLoggedIn = js.context['liff'].callMethod('isLoggedIn');
+      final liff = globalContext['liff'] as JSObject;
+      final isLoggedIn = (liff.callMethod<JSBoolean>('isLoggedIn'.toJS)).toDart;
 
       if (!isLoggedIn) {
-        // ถ้ายังไม่ได้ล็อกอิน ให้พาไปหน้าล็อกอินของ LINE
         debugPrint('🌐 [WEB] ยังไม่ได้ล็อกอิน เด้งไปหน้า LINE Login...');
-        js.context['liff'].callMethod('login');
-        return null; // หยุดการทำงานชั่วคราว เพราะเว็บจะโดน Redirect ไปหน้าล็อกอิน
+        liff.callMethod('login'.toJS);
+        return null; // หน้าเว็บจะถูก Redirect ไปที่ LINE Login
       }
 
-      // 📍 2. ถ้าล็อกอินแล้ว ให้ดึง Profile ออกมา (เอา userId ของจริง)
       debugPrint('🌐 [WEB] ล็อกอินแล้ว กำลังดึง Profile...');
-      final profilePromise = js.context['liff'].callMethod('getProfile');
-      final jsProfile = await js.context['Promise'].callMethod('resolve', [profilePromise]);
-      
-      // ดึง userId ออกมาจาก Object ที่ LINE คืนมา
-      final lineUserId = jsProfile['userId'].toString();
+      final profilePromise = liff.callMethod<JSPromise>('getProfile'.toJS);
+      final jsProfile = (await profilePromise.toDart) as JSObject;
+
+      final userIdObj = jsProfile['userId'];
+      if (userIdObj == null) {
+        throw Exception('ไม่สามารถอ่านค่า userId จาก Profile ได้');
+      }
+
+      final lineUserId = (userIdObj as JSString).toDart;
       debugPrint('✅ [WEB] ได้ LINE ID: $lineUserId');
 
-      // 📍 3. นำ LINE ID ของจริงมาสร้าง Shadow Account ทะลวงเข้า Supabase
+      // สร้าง Shadow Account สำหรับ Supabase
       final shadowEmail = '$lineUserId@ncd-app.local';
       final shadowPassword = 'NCD_${lineUserId}_Secure99!';
 
@@ -87,11 +96,10 @@ class AuthServiceImpl implements AuthStrategy {
   @override
   Future<void> signOut() async {
     try {
-      if (_isLiffInitialized) {
-        // ล็อกเอาต์ออกจากระบบของ LINE LIFF ด้วย
-        js.context['liff'].callMethod('logout');
+      if (_isLiffInitialized && globalContext.has('liff')) {
+        final liff = globalContext['liff'] as JSObject;
+        liff.callMethod('logout'.toJS);
       }
-      // ล็อกเอาต์ออกจาก Supabase
       await _supabase.auth.signOut();
     } catch (e) {
       debugPrint('Web Logout Error: $e');
