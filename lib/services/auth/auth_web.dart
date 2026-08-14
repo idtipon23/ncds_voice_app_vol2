@@ -102,4 +102,4 @@ class AuthServiceImpl implements AuthStrategy {
   User? get currentUser => _supabase.auth.currentUser;
 }
 
-AuthStrategy getPlatformAuthService() => AuthServiceImpl();
+AuthStrategy getAuthService() => AuthServiceImpl();
