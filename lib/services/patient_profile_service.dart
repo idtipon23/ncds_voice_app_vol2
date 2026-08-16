@@ -33,7 +33,7 @@ class PatientProfileService {
     return profile['id'] != null && hn.isNotEmpty && hospitalId.isNotEmpty;
   }
 
-  /// 📍 ฟังก์ชันดึงโปรไฟล์อัจฉริยะ 
+  /// 📍 ฟังก์ชันดึงโปรไฟล์อัจฉริยะ
   Future<Map<String, dynamic>?> validateAndLoadProfile() async {
     final currentUser = _supabase.auth.currentUser;
     final prefs = await SharedPreferences.getInstance();
@@ -45,12 +45,13 @@ class PatientProfileService {
             .from('patients')
             .select()
             // 📍 [แก้ไขแล้ว]: เปลี่ยนจาก 'id' เป็น 'auth_user_id'
-            .eq('auth_user_id', currentUser.id) 
+            .eq('auth_user_id', currentUser.id)
             .maybeSingle();
 
         if (data != null && isProfileComplete(data)) {
           await _saveSmartMemory(
-            patientId: data['id'].toString(), // 📍 ใช้ 'id' (Primary Key) ในการเซฟลงเครื่องตามปกติ
+            patientId: data['id']
+                .toString(), // 📍 ใช้ 'id' (Primary Key) ในการเซฟลงเครื่องตามปกติ
             hn: data['hn'].toString(),
             hospitalId: data['hospital_id'].toString(),
             profileData: data,
@@ -92,7 +93,7 @@ class PatientProfileService {
         return cachedProfile;
       }
 
-      return null; 
+      return null;
     } catch (e) {
       debugPrint('⚠️ Error validating profile: $e');
       return await getProfile();
@@ -139,34 +140,47 @@ class PatientProfileService {
       try {
         final Map<String, dynamic> updatePayload = {};
 
-        // 📍 [แก้ไขแล้ว] รองรับ Key ทั้งแบบเก่าและแบบที่ตรงกับ Database 100%
+        // ข้อมูลส่วนตัวพื้นฐาน
+        if (newData.containsKey('first_name'))
+          updatePayload['first_name'] = newData['first_name'];
+        if (newData.containsKey('last_name'))
+          updatePayload['last_name'] = newData['last_name'];
+        if (newData.containsKey('name'))
+          updatePayload['name'] = newData['name'];
         if (newData.containsKey('age')) updatePayload['age'] = newData['age'];
+        if (newData.containsKey('gender'))
+          updatePayload['gender'] = newData['gender'];
 
-        // จัดการน้ำหนัก
-        if (newData.containsKey('weight_kg'))
+        // สัดส่วนร่างกาย
+        if (newData.containsKey('weight_kg')) {
           updatePayload['weight_kg'] = newData['weight_kg'];
-        else if (newData.containsKey('weight'))
+        } else if (newData.containsKey('weight')) {
           updatePayload['weight_kg'] = newData['weight'];
+        }
 
-        // จัดการส่วนสูง
-        if (newData.containsKey('height_cm'))
+        if (newData.containsKey('height_cm')) {
           updatePayload['height_cm'] = newData['height_cm'];
-        else if (newData.containsKey('height'))
+        } else if (newData.containsKey('height')) {
           updatePayload['height_cm'] = newData['height'];
+        }
 
-        // 📍 เพิ่มการรับค่า BMI เพื่อส่งขึ้น Supabase
+        // ค่าคำนวณ BMI, BMR, TDEE
         if (newData.containsKey('bmi')) updatePayload['bmi'] = newData['bmi'];
+        if (newData.containsKey('bmr')) updatePayload['bmr'] = newData['bmr'];
+        if (newData.containsKey('tdee'))
+          updatePayload['tdee'] = newData['tdee'];
+        if (newData.containsKey('activity_level'))
+          updatePayload['activity_level'] = newData['activity_level'];
 
-        // จัดการข้อมูลโรคประจำตัวและวิถีชีวิต
-        if (newData.containsKey('underlying_diseases'))
+        // โรคประจำตัวและพฤติกรรม
+        if (newData.containsKey('underlying_diseases')) {
           updatePayload['underlying_diseases'] = newData['underlying_diseases'];
-        else if (newData.containsKey('diseases'))
+        } else if (newData.containsKey('diseases')) {
           updatePayload['underlying_diseases'] = newData['diseases'];
+        }
 
-        if (newData.containsKey('takes_medication'))
-          updatePayload['takes_medication'] = newData['takes_medication'];
-        else if (newData.containsKey('takesMedication'))
-          updatePayload['takes_medication'] = newData['takesMedication'];
+        if (newData.containsKey('smokes'))
+          updatePayload['smokes'] = newData['smokes'];
 
         if (updatePayload.isNotEmpty) {
           await _supabase
@@ -175,7 +189,7 @@ class PatientProfileService {
               .eq('id', patientId);
         }
       } catch (e) {
-        debugPrint('⚠️ Error Syncing to Supabase: $e');
+        debugPrint('⚠️ Error Syncing Profile to Supabase: $e');
       }
     }
   }
@@ -307,6 +321,7 @@ class PatientProfileService {
     await prefs.setBool(_isRegisteredKey, true);
     await prefs.setBool(_onboardedKey, true);
   }
+
   /// ตรวจสอบว่า Patient ID นี้ยังมีอยู่ในฐานข้อมูลจริงหรือไม่ (คืนค่า true/false)
   Future<bool> verifySessionInDatabase(String patientId) async {
     try {
@@ -315,12 +330,11 @@ class PatientProfileService {
           .select('id')
           .eq('id', patientId)
           .maybeSingle();
-      
+
       return data != null;
     } catch (e) {
       debugPrint('❌ Error verifying session in database: $e');
       return false;
     }
   }
-
 }

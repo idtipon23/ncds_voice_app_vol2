@@ -3,7 +3,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart'; // 📍 1. นำเข้า kIsWeb
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -18,11 +17,6 @@ class NotificationService {
       GlobalKey<NavigatorState>();
 
   Future<void> init() async {
-    // 📍 2. ดักไว้เลยว่าถ้าเป็น Web ให้หยุดทำงานฟังก์ชันนี้ (ไม่แครชแน่นอน)
-    if (kIsWeb) {
-      debugPrint('🌐 [WEB] ข้ามการตั้งค่าระบบแจ้งเตือน (Web ไม่รองรับ)');
-      return;
-    }
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Bangkok'));
 
@@ -54,19 +48,22 @@ class NotificationService {
     }
   }
 
-  // 📍 3. ดัก kIsWeb ในทุกฟังก์ชันที่เกี่ยวกับการตั้งปลุก เพื่อไม่ให้เว็บแครช
   Future<void> scheduleMedicationWithSnooze({
     required int baseId,
     required String title,
     required String body,
     required DateTime scheduledTime,
   }) async {
-    if (kIsWeb) return; 
-    
     final now = tz.TZDateTime.now(tz.local);
+
     for (int i = 0; i < 4; i++) {
       tz.TZDateTime targetTime = tz.TZDateTime(
-        tz.local, now.year, now.month, now.day, scheduledTime.hour, scheduledTime.minute,
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        scheduledTime.hour,
+        scheduledTime.minute,
       ).add(Duration(minutes: i * 15));
 
       if (targetTime.isBefore(now)) {
@@ -78,6 +75,7 @@ class NotificationService {
         title: i == 0 ? title : '⏳ แจ้งเตือนซ้ำ: $title',
         body: body,
         targetTime: targetTime,
+        // 🚀 ตั้งปลุกครั้งแรก เป็น Daily ทั้งหมด
         matchTime: DateTimeComponents.time,
       );
     }
@@ -91,7 +89,6 @@ class NotificationService {
     required tz.TZDateTime targetTime,
     DateTimeComponents? matchTime,
   }) async {
-    if (kIsWeb) return; // 📍 ดัก Web
     // 🛠️ [Fix]: ตรวจสอบสิทธิ์ Exact Alarm บน Android ก่อนตั้งเวลา
     // เพื่อป้องกันแอป Crash (Silent Error) หากสิทธิ์ถูกบล็อกโดย OS
     AndroidScheduleMode scheduleMode = AndroidScheduleMode.exactAllowWhileIdle;
@@ -150,7 +147,6 @@ class NotificationService {
     required String title,
     required String body,
   }) async {
-    if (kIsWeb) return; // 📍 ดัก Web
     // 1. 🚀 ล้าง Ghost Alarms เผื่อไว้ 15 ID พร้อมห่อ try-catch ป้องกัน Plugin Crash รายตัว
     for (int i = 0; i <= 15; i++) {
       try {

@@ -3,7 +3,7 @@ import 'home_screen.dart';
 // 📍 1. Import จากโฟลเดอร์ auth ใหม่ของเรา
 import '../services/auth/auth_service.dart';
 import '../services/patient_profile_service.dart';
-import '../screens/identity_registration_screen.dart'; 
+import '../screens/identity_registration_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,7 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   // 📍 2. เรียกใช้งานผ่าน getAuthService() (ระบบจะเลือก Web/Mobile ให้เองอัตโนมัติ)
   final authService = getAuthService();
   final PatientProfileService _profileService = PatientProfileService();
-  
+
   bool _isLoading = false;
 
   Future<void> _handleEnterApp() async {
@@ -46,7 +46,8 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const IdentityRegistrationScreen()),
+          MaterialPageRoute(
+              builder: (context) => const IdentityRegistrationScreen()),
         );
       }
     } catch (e) {
@@ -103,19 +104,26 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: 48),
-
                 _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)))
+                    ? const Center(
+                        child:
+                            CircularProgressIndicator(color: Color(0xFF10B981)))
                     : ElevatedButton.icon(
                         onPressed: _handleEnterApp,
-                        icon: const Icon(Icons.chat_bubble_rounded, color: Colors.white),
+                        icon: const Icon(Icons.chat_bubble_rounded,
+                            color: Colors.white),
                         label: const Text(
                           'เข้าสู่ระบบด้วย LINE',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF06C755), // สีเขียว LINE Official
-                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+                          backgroundColor:
+                              const Color(0xFF06C755), // สีเขียว LINE Official
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 16, horizontal: 32),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),

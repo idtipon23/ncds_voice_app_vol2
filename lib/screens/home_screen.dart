@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../services/patient_profile_service.dart';
 import '../services/vital_repository.dart';
-
-import 'vital_sign_record_screen.dart'; 
-import 'health_history_screen.dart';    
+import 'vital_sign_record_screen.dart';
+import 'health_history_screen.dart';
 import 'patient_profile_screen.dart';
-import 'medication_history_screen.dart'; 
+import 'medication_history_screen.dart';
 import 'login_page.dart';
+import 'nutrition_screen.dart'; // 📍 เพิ่มบรรทัดนี้ด้านบน
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -76,7 +76,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(Icons.logout, color: Colors.redAccent),
             SizedBox(width: 8),
-            Text('ยืนยันการออกจากระบบ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text('ยืนยันการออกจากระบบ',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
         content: const Text('คุณต้องการออกจากระบบและกลับไปหน้าหลักหรือไม่?'),
@@ -98,7 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               }
             },
-            child: const Text('ออกจากระบบ', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('ออกจากระบบ', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -116,8 +118,10 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: Container(
               padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
-              child: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
+              child: const Icon(Icons.logout_rounded,
+                  color: Colors.redAccent, size: 20),
             ),
             onPressed: _confirmLogout,
           ),
@@ -131,28 +135,37 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: BoxDecoration(
               image: DecorationImage(
                 // ใช้ภาพ Stock คลินิกสะอาดๆ (คุณพยาบาลสามารถเปลี่ยน URL เป็นภาพที่ต้องการได้)
-                image: const NetworkImage('https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=1000&auto=format&fit=crop'),
+                image: const NetworkImage(
+                    'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=1000&auto=format&fit=crop'),
                 fit: BoxFit.cover,
                 // ปรับแสงให้ขาว/สว่างขึ้น 85% เพื่อให้ดูบางๆ สบายตา ไม่แย่งซีนตัวหนังสือ
-                colorFilter: ColorFilter.mode(Colors.white.withOpacity(0.88), BlendMode.lighten),
+                colorFilter: ColorFilter.mode(
+                    Colors.white.withOpacity(0.88), BlendMode.lighten),
               ),
             ),
           ),
-          
+
           // 📋 2. เนื้อหาหลักของหน้าจอ
           SafeArea(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: emeraldColor))
+                ? const Center(
+                    child: CircularProgressIndicator(color: emeraldColor))
                 : SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // --- ส่วนหัว (Greeting) ---
-                        Text('สวัสดีครับ 👋', style: TextStyle(fontSize: 16, color: Colors.grey.shade700)),
+                        Text('สวัสดีครับ 👋',
+                            style: TextStyle(
+                                fontSize: 16, color: Colors.grey.shade700)),
                         Text(
                           'คุณ $_patientName',
-                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: slateColor),
+                          style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: slateColor),
                         ),
                         const SizedBox(height: 24),
 
@@ -161,7 +174,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 32),
 
                         // --- 🗂️ ส่วนเมนูหลัก (Modern Grid) ---
-                        const Text('เมนูบริการ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slateColor)),
+                        const Text('เมนูบริการ',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: slateColor)),
                         const SizedBox(height: 16),
                         GridView.count(
                           shrinkWrap: true,
@@ -176,28 +193,55 @@ class _HomeScreenState extends State<HomeScreen> {
                               subtitle: 'ด้วยเสียง/กล้อง',
                               icon: Icons.monitor_heart_rounded,
                               color: emeraldColor,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VitalSignRecordScreen())),
+                              onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const VitalSignRecordScreen())),
                             ),
                             _buildMenuCard(
                               title: 'ห้องยา',
                               subtitle: 'ประวัติและเตือนกินยา',
                               icon: Icons.medication_liquid_rounded,
                               color: Colors.blue.shade500,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MedicationHistoryScreen())),
+                              onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const MedicationHistoryScreen())),
+                            ),
+                            // 🥗 เมนูใหม่: โภชนาการ & กิจกรรม (TDEE, Food AI, Calorie Deficit)
+                            _buildMenuCard(
+                              title: 'โภชนาการ & กิจกรรม',
+                              subtitle: 'คำนวณแคล/ออกกำลัง',
+                              icon: Icons.restaurant_menu_rounded,
+                              color: Colors.deepOrange.shade400,
+                              onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const NutritionScreen())),
                             ),
                             _buildMenuCard(
                               title: 'สมุดสุขภาพ',
                               subtitle: 'กราฟและผลแล็บ',
                               icon: Icons.history_edu_rounded,
                               color: Colors.orange.shade500,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HealthHistoryScreen())),
+                              onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const HealthHistoryScreen())),
                             ),
                             _buildMenuCard(
                               title: 'โปรไฟล์ของฉัน',
-                              subtitle: 'ประเมินความเสี่ยง',
+                              subtitle: 'TDEE และความเสี่ยง',
                               icon: Icons.person_rounded,
                               color: Colors.purple.shade400,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PatientProfileScreen())),
+                              onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const PatientProfileScreen())),
                             ),
                           ],
                         ),
@@ -221,7 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_hasVitalData) {
       // คำนวณเปอร์เซ็นต์ (Clamp ไว้ที่ 0.0 - 1.0)
       positionPercent = ((_avgSys7Days - 90) / (180 - 90)).clamp(0.0, 1.0);
-      
+
       if (_avgSys7Days < 130) {
         statusText = "ควบคุมได้ดี";
         statusColor = Colors.green.shade600;
@@ -240,7 +284,10 @@ class _HomeScreenState extends State<HomeScreen> {
         color: Colors.white.withOpacity(0.9), // Glassmorphism อ่อนๆ
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 5)),
         ],
         border: Border.all(color: Colors.white, width: 2),
       ),
@@ -250,31 +297,57 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('🩺 ค่าความดันเฉลี่ย (7 วันล่าสุด)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: slateColor)),
+              const Text('🩺 ค่าความดันเฉลี่ย (7 วันล่าสุด)',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: slateColor)),
               if (_hasVitalData)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: statusColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                  child: Text(statusText, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: statusColor)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Text(statusText,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor)),
                 ),
             ],
           ),
           const SizedBox(height: 16),
-          
           if (!_hasVitalData)
-             const Center(child: Padding(
-               padding: EdgeInsets.symmetric(vertical: 10),
-               child: Text('ยังไม่มีประวัติการวัดความดันใน 7 วันที่ผ่านมา', style: TextStyle(color: Colors.grey)),
-             ))
+            const Center(
+                child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Text('ยังไม่มีประวัติการวัดความดันใน 7 วันที่ผ่านมา',
+                  style: TextStyle(color: Colors.grey)),
+            ))
           else ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(_avgSys7Days.toStringAsFixed(0), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: slateColor, height: 1)),
-                const Text(' / ', style: TextStyle(fontSize: 24, color: Colors.grey, height: 1.2)),
-                Text(_avgDia7Days.toStringAsFixed(0), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: slateColor, height: 1.2)),
+                Text(_avgSys7Days.toStringAsFixed(0),
+                    style: const TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w900,
+                        color: slateColor,
+                        height: 1)),
+                const Text(' / ',
+                    style: TextStyle(
+                        fontSize: 24, color: Colors.grey, height: 1.2)),
+                Text(_avgDia7Days.toStringAsFixed(0),
+                    style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: slateColor,
+                        height: 1.2)),
                 const SizedBox(width: 6),
-                const Text('mmHg', style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.6)),
+                const Text('mmHg',
+                    style: TextStyle(
+                        fontSize: 14, color: Colors.grey, height: 1.6)),
               ],
             ),
             const SizedBox(height: 20),
@@ -294,11 +367,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFFEF4444)], // Green, Yellow, Red
+                          colors: [
+                            Color(0xFF10B981),
+                            Color(0xFFF59E0B),
+                            Color(0xFFEF4444)
+                          ], // Green, Yellow, Red
                           stops: [0.3, 0.6, 1.0],
                         ),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))
+                          BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2))
                         ],
                       ),
                       // 🌟 เพิ่มเงาสะท้อน (Glossy Effect) ด้านบนแท่ง
@@ -316,10 +396,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                    
+
                     // เข็มชี้ (Indicator Pin)
                     Positioned(
-                      left: (barWidth - 16) * positionPercent, // คำนวณตำแหน่งเข็ม
+                      left:
+                          (barWidth - 16) * positionPercent, // คำนวณตำแหน่งเข็ม
                       child: Container(
                         width: 16,
                         height: 28,
@@ -328,7 +409,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: slateColor, width: 2),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2))
+                            BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2))
                           ],
                         ),
                       ),
@@ -341,9 +425,21 @@ class _HomeScreenState extends State<HomeScreen> {
             const Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('ปกติ', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-                Text('เริ่มสูง', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-                Text('อันตราย', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
+                Text('ปกติ',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold)),
+                Text('เริ่มสูง',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold)),
+                Text('อันตราย',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold)),
               ],
             ),
           ]
@@ -353,7 +449,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // 🎴 Widget: การ์ดเมนูทันสมัย (Modern Menu Card)
-  Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color color, required VoidCallback onTap}) {
+  Widget _buildMenuCard(
+      {required String title,
+      required String subtitle,
+      required IconData icon,
+      required Color color,
+      required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -362,7 +463,10 @@ class _HomeScreenState extends State<HomeScreen> {
           color: Colors.white.withOpacity(0.95), // Glassmorphism ขาวขุ่น
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: color.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 8)),
+            BoxShadow(
+                color: color.withOpacity(0.1),
+                blurRadius: 15,
+                offset: const Offset(0, 8)),
           ],
           border: Border.all(color: Colors.white, width: 2),
         ),
@@ -372,13 +476,19 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: color.withOpacity(0.15), shape: BoxShape.circle),
               child: Icon(icon, color: color, size: 28),
             ),
             const Spacer(),
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: slateColor)),
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: slateColor)),
             const SizedBox(height: 2),
-            Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            Text(subtitle,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
           ],
         ),
       ),

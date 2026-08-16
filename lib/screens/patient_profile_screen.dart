@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/patient_profile_service.dart';
 import '../services/patient_database_service.dart';
 import '../services/vital_repository.dart';
-import '../services/th_cv_risk_calculator.dart'; // โมเดลคำนวณความเสี่ยงเดิม
+import '../services/th_cv_risk_calculator.dart';
 import '../widgets/bmi_bar_chart.dart';
 
 class PatientProfileScreen extends StatefulWidget {
@@ -27,15 +27,44 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   final _bmiController = TextEditingController();
   final _diseaseController = TextEditingController();
 
-  bool _isSmoker = false; // 📍 สถานะสูบบุหรี่ (แก้ไขได้)
+  // 📍 ตัวแปรระบบใหม่สำหรับ TDEE & Activity
+  String _gender = 'ชาย';
+  String _activityLevel = 'sedentary';
+  double _bmr = 0.0;
+  double _tdee = 0.0;
+
+  bool _isSmoker = false;
   bool _isLoading = true;
   bool _isSaving = false;
   Map<String, dynamic>? _profileData;
   Map<String, dynamic>? _latestLab;
-  int _latestSystolic = 120; // 📍 ค่าความดันตัวบนล่าสุดจากประวัติจริง
+  int _latestSystolic = 120;
 
   static const Color emeraldColor = Color(0xFF10B981);
   static const Color slateColor = Color(0xFF334155);
+
+  final Map<String, Map<String, dynamic>> _activityOptions = {
+    'sedentary': {
+      'label': 'นั่งทำงานอยู่กับที่ (ไม่ออกกำลังกาย)',
+      'multiplier': 1.2,
+    },
+    'light': {
+      'label': 'ออกกำลังกายเบาๆ (1-3 วัน/สัปดาห์)',
+      'multiplier': 1.375,
+    },
+    'moderate': {
+      'label': 'ออกกำลังกายปานกลาง (3-5 วัน/สัปดาห์)',
+      'multiplier': 1.55,
+    },
+    'active': {
+      'label': 'ออกกำลังกายหนัก (6-7 วัน/สัปดาห์)',
+      'multiplier': 1.725,
+    },
+    'very_active': {
+      'label': 'ใช้แรงงานหนัก / ซ้อมกีฬาหนัก',
+      'multiplier': 1.9,
+    },
+  };
 
   @override
   void initState() {
@@ -54,14 +83,21 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           _lNameController.text = profile['last_name'] ?? '';
           _ageController.text = (profile['age'] ?? '').toString();
           _weightController.text =
-              (profile['weight'] ?? profile['weight_kg'] ?? '').toString();
+              (profile['weight_kg'] ?? profile['weight'] ?? '').toString();
           _heightController.text =
-              (profile['height'] ?? profile['height_cm'] ?? '').toString();
+              (profile['height_cm'] ?? profile['height'] ?? '').toString();
           _bmiController.text = (profile['bmi'] ?? '').toString();
           _diseaseController.text =
               profile['underlying_diseases'] ?? profile['diseases'] ?? '';
           _isSmoker = profile['smokes'] == true || profile['smokers'] == true;
-          _isLoading = false; // ปลดล็อกหน้าจอให้แสดงผลทันที
+          _gender = profile['gender']?.toString() ?? 'ชาย';
+          _activityLevel = profile['activity_level']?.toString() ?? 'sedentary';
+          if (!_activityOptions.containsKey(_activityLevel)) {
+            _activityLevel = 'sedentary';
+          }
+
+          _calculateMetrics();
+          _isLoading = false;
         });
 
         if (profile['id'] != null) {
@@ -96,31 +132,86 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     }
   }
 
+  // 📍 คำนวณสูตร BMI, BMR, TDEE อัตโนมัติ (Mifflin-St Jeor Formula)
+  void _calculateMetrics() {
+    final weight = double.tryParse(_weightController.text) ?? 0.0;
+    final height = double.tryParse(_heightController.text) ?? 0.0;
+    final age = int.tryParse(_ageController.text) ?? 0;
+
+    double bmi = 0.0;
+    if (height > 0 && weight > 0) {
+      final heightInMeter = height / 100;
+      bmi = weight / (heightInMeter * heightInMeter);
+      _bmiController.text = bmi.toStringAsFixed(1);
+    }
+
+    double bmr = 0.0;
+    if (weight > 0 && height > 0 && age > 0) {
+      if (_gender == 'ชาย') {
+        bmr = (10 * weight) + (6.25 * height) - (5 * age) + 5;
+      } else {
+        bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161;
+      }
+    }
+
+    final multiplier =
+        _activityOptions[_activityLevel]?['multiplier'] as double? ?? 1.2;
+    final tdee = bmr * multiplier;
+
+    _bmr = bmr;
+    _tdee = tdee;
+  }
+
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _isSaving = true);
+
+    _calculateMetrics();
+
+    final fName = _fNameController.text.trim();
+    final lName = _lNameController.text.trim();
+    final weight = double.tryParse(_weightController.text) ?? 0.0;
+    final height = double.tryParse(_heightController.text) ?? 0.0;
+    final age = int.tryParse(_ageController.text) ?? 0;
+    final bmi = double.tryParse(_bmiController.text) ?? 0.0;
 
     final updateData = {
-      'age': int.tryParse(_ageController.text) ?? 0,
-      'weight': double.tryParse(_weightController.text) ?? 0.0,
-      'height': double.tryParse(_heightController.text) ?? 0.0,
-      'underlying_diseases': _diseaseController.text,
-      'smokes': _isSmoker, // บันทึกสถานะสูบบุหรี่
+      'first_name': fName,
+      'last_name': lName,
+      'name': '$fName $lName',
+      'age': age,
+      'gender': _gender,
+      'weight': weight,
+      'weight_kg': weight,
+      'height': height,
+      'height_cm': height,
+      'bmi': bmi,
+      'bmr': double.parse(_bmr.toStringAsFixed(1)),
+      'tdee': double.parse(_tdee.toStringAsFixed(1)),
+      'activity_level': _activityLevel,
+      'underlying_diseases': _diseaseController.text.trim(),
+      'smokes': _isSmoker,
     };
 
-    // บันทึกลงเครื่อง (Local)
+    // 1. บันทึกลง Local (SharedPreferences)
     await _profileService.updateLocalProfile(updateData);
 
-    // บันทึกลง Supabase (Cloud)
+    // 2. บันทึกลง Supabase (ตาราง patients)
     try {
       final patientId = await _profileService.getCurrentPatientId();
       if (patientId != null && patientId.isNotEmpty) {
         await Supabase.instance.client.from('patients').update({
+          'first_name': updateData['first_name'],
+          'last_name': updateData['last_name'],
+          'name': updateData['name'],
           'age': updateData['age'],
-          'weight_kg': updateData['weight'],
-          'height_cm': updateData['height'],
+          'gender': updateData['gender'],
+          'weight_kg': updateData['weight_kg'],
+          'height_cm': updateData['height_cm'],
+          'bmi': updateData['bmi'],
+          'bmr': updateData['bmr'],
+          'tdee': updateData['tdee'],
+          'activity_level': updateData['activity_level'],
           'underlying_diseases': updateData['underlying_diseases'],
           'smokes': updateData['smokes'],
         }).eq('id', patientId);
@@ -136,7 +227,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('บันทึกข้อมูลโปรไฟล์และสถานะเรียบร้อยแล้ว'),
+          content:
+              const Text('บันทึกข้อมูลโปรไฟล์และเป้าหมายพลังงานเรียบร้อยแล้ว'),
           backgroundColor: emeraldColor,
           behavior: SnackBarBehavior.floating,
           shape:
@@ -160,14 +252,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    double currentBmi = 0.0;
-    if (_profileData != null && _profileData!['bmi'] != null) {
-      currentBmi = double.tryParse(_profileData!['bmi'].toString()) ?? 0.0;
-    }
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('โปรไฟล์ผู้ป่วยและการประเมินความเสี่ยง',
+        title: const Text('โปรไฟล์ผู้ป่วย & ข้อมูลสุขภาพ',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: emeraldColor,
         elevation: 0,
@@ -176,139 +264,241 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: emeraldColor))
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.all(16.0),
               child: Form(
                 key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // 🌟 1. การ์ดประเมิน Thai CVD Risk พรีเมียม (ดึงค่าความดันจริง & สถานะสูบบุหรี่จริง)
+                    // 🌟 1. การ์ดพลังงานรวม BMR & TDEE (Scrollable Dashboard)
+                    _buildEnergySummaryCard(),
+                    const SizedBox(height: 16),
+
+                    // 🌟 2. การ์ดประเมิน Thai CVD Risk (คำนวณตามเพศจริง)
                     _buildThaiCvdRiskCard(),
+                    const SizedBox(height: 16),
+
+                    // 📝 3. ฟอร์มข้อมูลส่วนตัวและสุขภาพ
+                    Card(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('ข้อมูลร่างกายและกิจกรรม',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: slateColor)),
+                            const Divider(height: 24),
+
+                            // ชื่อ - นามสกุล
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _fNameController,
+                                    decoration: _inputDecoration(
+                                        'ชื่อ', Icons.person_outline),
+                                    validator: (v) => v!.trim().isEmpty
+                                        ? 'กรุณากรอกชื่อ'
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _lNameController,
+                                    decoration: _inputDecoration(
+                                        'นามสกุล', Icons.person),
+                                    validator: (v) => v!.trim().isEmpty
+                                        ? 'กรุณากรอกนามสกุล'
+                                        : null,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // เพศกำเนิด & อายุ
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _gender,
+                                    decoration: _inputDecoration(
+                                        'เพศกำเนิด', Icons.wc_outlined),
+                                    items: const [
+                                      DropdownMenuItem(
+                                          value: 'ชาย', child: Text('ชาย')),
+                                      DropdownMenuItem(
+                                          value: 'หญิง', child: Text('หญิง')),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() {
+                                          _gender = val;
+                                          _calculateMetrics();
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _ageController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: _inputDecoration(
+                                        'อายุ (ปี)', Icons.cake_outlined),
+                                    onChanged: (_) =>
+                                        setState(() => _calculateMetrics()),
+                                    validator: (v) =>
+                                        v!.trim().isEmpty ? 'ระบุอายุ' : null,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // น้ำหนัก & ส่วนสูง & BMI
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _weightController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    decoration: _inputDecoration(
+                                        'น้ำหนัก (กก.)',
+                                        Icons.monitor_weight_outlined),
+                                    onChanged: (_) =>
+                                        setState(() => _calculateMetrics()),
+                                    validator: (v) => v!.trim().isEmpty
+                                        ? 'ระบุน้ำหนัก'
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _heightController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    decoration: _inputDecoration(
+                                        'ส่วนสูง (ซม.)', Icons.height),
+                                    onChanged: (_) =>
+                                        setState(() => _calculateMetrics()),
+                                    validator: (v) => v!.trim().isEmpty
+                                        ? 'ระบุส่วนสูง'
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _bmiController,
+                                    readOnly: true,
+                                    decoration: _inputDecoration(
+                                        'ค่า BMI', Icons.analytics_outlined),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 📊 กราฟ BMI Bar Chart
+                            if (double.tryParse(_bmiController.text) != null &&
+                                double.parse(_bmiController.text) > 0) ...[
+                              BmiBarChart(
+                                  bmi: double.parse(_bmiController.text)),
+                              const SizedBox(height: 16),
+                            ],
+
+                            // ระดับกิจกรรมประจำวัน (Activity Level)
+                            DropdownButtonFormField<String>(
+                              value: _activityLevel,
+                              isExpanded: true,
+                              decoration: _inputDecoration(
+                                  'กิจกรรมและการออกกำลังกาย',
+                                  Icons.directions_run_rounded),
+                              items: _activityOptions.entries.map((e) {
+                                return DropdownMenuItem<String>(
+                                  value: e.key,
+                                  child: Text(e.value['label'],
+                                      style: const TextStyle(fontSize: 13)),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _activityLevel = val;
+                                    _calculateMetrics();
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 16),
+
+                            // โรคประจำตัว
+                            TextFormField(
+                              controller: _diseaseController,
+                              decoration: _inputDecoration('โรคประจำตัว',
+                                  Icons.medical_services_outlined),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // สลับสถานะสูบบุหรี่
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: SwitchListTile(
+                                title: const Text('ประวัติการสูบบุหรี่',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: slateColor,
+                                        fontSize: 14)),
+                                subtitle: Text(
+                                  _isSmoker
+                                      ? '🚬 สูบบุหรี่ (มีความเสี่ยงเพิ่มขึ้น)'
+                                      : '✨ ไม่สูบบุหรี่ / เลิกสูบแล้ว',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: _isSmoker
+                                          ? Colors.red.shade600
+                                          : emeraldColor,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                secondary: Icon(Icons.smoking_rooms,
+                                    color:
+                                        _isSmoker ? Colors.red : emeraldColor),
+                                value: _isSmoker,
+                                activeColor: Colors.red,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _isSmoker = val;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 24),
 
-                    // 📝 2. ฟอร์มข้อมูลส่วนตัวและสุขภาพ
-                    const Text('ข้อมูลส่วนตัวและสุขภาพ',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: slateColor)),
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                            child: TextFormField(
-                                controller: _fNameController,
-                                decoration: _inputDecoration(
-                                    'ชื่อ', Icons.person_outline))),
-                        const SizedBox(width: 12),
-                        Expanded(
-                            child: TextFormField(
-                                controller: _lNameController,
-                                decoration:
-                                    _inputDecoration('นามสกุล', Icons.person))),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    Row(
-                      children: [
-                        Expanded(
-                            child: TextFormField(
-                                controller: _ageController,
-                                keyboardType: TextInputType.number,
-                                decoration: _inputDecoration(
-                                    'อายุ (ปี)', Icons.cake_outlined))),
-                        const SizedBox(width: 12),
-                        Expanded(
-                            child: TextFormField(
-                                controller: _weightController,
-                                keyboardType: TextInputType.number,
-                                decoration: _inputDecoration('น้ำหนัก (กก.)',
-                                    Icons.monitor_weight_outlined))),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    Row(
-                      children: [
-                        Expanded(
-                            child: TextFormField(
-                                controller: _heightController,
-                                keyboardType: TextInputType.number,
-                                decoration: _inputDecoration(
-                                    'ส่วนสูง (ซม.)', Icons.height))),
-                        const SizedBox(width: 12),
-                        Expanded(
-                            child: TextFormField(
-                                controller: _bmiController,
-                                readOnly: true,
-                                decoration: _inputDecoration(
-                                    'ค่า BMI', Icons.analytics_outlined))),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 📍 ---------------- แทรกโค้ดกราฟ BMI ตรงนี้ ---------------- 📍
-                    // ใช้ if และ ...[] (Spread Operator) เพื่อเช็กว่ามีค่า BMI ไหม ถ้ามีถึงจะแสดงกราฟ
-                    if (double.tryParse(_bmiController.text) != null &&
-                        double.parse(_bmiController.text) > 0) ...[
-                      BmiBarChart(bmi: double.parse(_bmiController.text)),
-                      const SizedBox(
-                          height: 16), // เว้นระยะห่างก่อนถึงช่องโรคประจำตัว
-                    ],
-
-                    // 📍 -------------------------------------------------------- 📍
-
-                    TextFormField(
-                      controller: _diseaseController,
-                      decoration: _inputDecoration(
-                          'โรคประจำตัว', Icons.medical_services_outlined),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 🚬 3. ช่องสลับสถานะสูบบุหรี่ (เพิ่มใหม่ ให้แก้ไขได้)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: SwitchListTile(
-                        title: const Text('ประวัติการสูบบุหรี่',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: slateColor,
-                                fontSize: 14)),
-                        subtitle: Text(
-                          _isSmoker
-                              ? '🚬 สูบบุหรี่ (มีความเสี่ยงเพิ่มขึ้น)'
-                              : '✨ ไม่สูบบุหรี่ / เลิกสูบแล้ว',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: _isSmoker
-                                  ? Colors.red.shade600
-                                  : emeraldColor,
-                              fontWeight: FontWeight.w600),
-                        ),
-                        secondary: Icon(Icons.smoking_rooms,
-                            color: _isSmoker ? Colors.red : emeraldColor),
-                        value: _isSmoker,
-                        activeColor: Colors.red,
-                        onChanged: (val) {
-                          setState(() {
-                            _isSmoker = val;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // ปุ่มบันทึกพรีเมียม
+                    // ปุ่มบันทึกโปรไฟล์
                     SizedBox(
-                      width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -321,13 +511,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                         child: _isSaving
                             ? const CircularProgressIndicator(
                                 color: Colors.white)
-                            : const Text('บันทึกข้อมูลโปรไฟล์',
+                            : const Text('บันทึกข้อมูลและเป้าหมายพลังงาน',
                                 style: TextStyle(
                                     fontSize: 16,
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold)),
                       ),
                     ),
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
@@ -352,6 +543,117 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     );
   }
 
+  // 🌟 การ์ดสรุปพลังงาน BMR & TDEE (Scrollable Modular Card)
+  Widget _buildEnergySummaryCard() {
+    final deficitTarget = (_tdee - 400).clamp(1200.0, 9999.0);
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: [emeraldColor.withOpacity(0.12), Colors.white],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.local_fire_department_rounded,
+                    color: Colors.deepOrange, size: 26),
+                SizedBox(width: 8),
+                Text('เป้าหมายพลังงานรายวัน (TDEE)',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: slateColor)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('BMR (เผาผลาญพื้นฐาน)',
+                            style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        const SizedBox(height: 4),
+                        Text('${_bmr.toStringAsFixed(0)} kcal',
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: slateColor)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('TDEE (ใช้พลังงานรวม)',
+                            style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        const SizedBox(height: 4),
+                        Text('${_tdee.toStringAsFixed(0)} kcal',
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: emeraldColor)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.tips_and_updates,
+                      color: Colors.orange, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'เป้าหมายลดน้ำหนักที่ปลอดภัย: ไม่เกิน ${deficitTarget.toStringAsFixed(0)} kcal/วัน',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.orange.shade900,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // 🌟 การ์ดแสดงผล Thai CVD Risk Score พร้อม Bar Chart
   Widget _buildThaiCvdRiskCard() {
     final int age = int.tryParse(_ageController.text) ?? 50;
@@ -361,10 +663,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         : null;
     bool hasLabData = cholesterol != null && cholesterol > 0;
 
-    // คำนวณความเสี่ยงโดยใช้ ThCvRiskCalculator ตัวจริง (ดึงค่าความดันจริง _latestSystolic และสถานะ _isSmoker)
+    // 📍 ส่งค่าพารามิเตอร์ตรงตาม Class ThCvRiskCalculator ในโปรเจกต์ของคุณเป๊ะ 100%
     final riskResult = ThCvRiskCalculator.calculateRisk(
       age: age,
-      gender: 'female',
+      gender: _gender == 'ชาย' ? 'male' : 'female', // แปลงเพศให้ตรงระบบ
       isSmoker: _isSmoker,
       hasDiabetes: hasDiabetes,
       systolicBP: _latestSystolic.toDouble(),
@@ -372,8 +674,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       useLabData: hasLabData,
     );
 
-    String riskLevel = riskResult['level'];
-    String colorCode = riskResult['color'];
+    String riskLevel = riskResult['level'] ?? 'ไม่ระบุ';
+    String colorCode = riskResult['color'] ?? 'green';
 
     Color riskColor = const Color(0xFF10B981);
     double progressVal = 0.3;
@@ -390,15 +692,15 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: riskColor.withOpacity(0.15),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
+            color: riskColor.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
         border: Border.all(color: riskColor.withOpacity(0.4), width: 1.5),
@@ -412,27 +714,26 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: riskColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(Icons.favorite_rounded,
-                        color: riskColor, size: 24),
+                        color: riskColor, size: 20),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   const Text(
                     'ประเมินโรคหัวใจ (Thai CVD Risk)',
                     style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: slateColor),
                   ),
                 ],
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: hasLabData ? Colors.teal.shade50 : Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(20),
@@ -442,9 +743,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           : Colors.blue.shade200),
                 ),
                 child: Text(
-                  hasLabData
-                      ? '✨ มีผลแล็บ (แม่นยำสูง)'
-                      : '📋 ไม่มีผลแล็บ (ประเมินเบื้องต้น)',
+                  hasLabData ? '✨ มีผลแล็บ' : '📋 ไม่มีผลแล็บ',
                   style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -455,32 +754,32 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('ระดับความเสี่ยงใน 10 ปีข้างหน้า:',
-                  style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
               Text(riskLevel,
                   style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: riskColor)),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
               value: progressVal,
-              minHeight: 12,
+              minHeight: 10,
               backgroundColor: Colors.grey.shade200,
               valueColor: AlwaysStoppedAnimation<Color>(riskColor),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
               borderRadius: BorderRadius.circular(12),

@@ -7,17 +7,6 @@ class AuthServiceImpl implements AuthStrategy {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   @override
-  Future<void> initLineSdk({String? channelId, String? liffId}) async {
-    try {
-      if (channelId == null || channelId.isEmpty) return;
-      await LineSDK.instance.setup(channelId);
-      debugPrint('✅ [MOBILE] LINE SDK Setup Completed');
-    } catch (e) {
-      debugPrint('❌ [MOBILE] LINE SDK Setup Error: $e');
-    }
-  }
-
-  @override
   Future<AuthResponse?> signInWithLine() async {
     try {
       debugPrint('📱 [MOBILE] กำลังล็อกอินผ่าน Native LINE SDK');

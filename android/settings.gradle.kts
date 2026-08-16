@@ -19,7 +19,7 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "8.9.1" apply false       // 📍 ปรับลดจาก 9.0.1 เป็น 8.3.2
+    id("com.android.application") version "8.11.1" apply false       // 📍 ปรับลดจาก 9.0.1 เป็น 8.3.2
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false  // 📍 ปรับลดจาก 2.3.20 เป็น 1.9.24
 }
 

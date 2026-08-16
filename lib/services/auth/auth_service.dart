@@ -1,4 +1,4 @@
-// ไฟล์นี้จะทำหน้าที่เป็น "ชุมทาง" สลับไฟล์ให้อัตโนมัติ
-export 'auth_stub.dart'
-    if (dart.library.html) 'auth_web.dart'
-    if (dart.library.io) 'auth_mobile.dart';
+// ถ้ารันบน Web จะไปดึง auth_web.dart 
+// ถ้าไม่ใช่ Web จะไปดึง auth_mobile.dart (ค่าเริ่มต้น)
+export 'auth_mobile.dart'
+    if (dart.library.html) 'auth_web.dart';
