@@ -11,6 +11,27 @@ class VoiceHealthService {
   final PatientProfileService _profileService = PatientProfileService();
   final FlutterTts _flutterTts = FlutterTts();
   bool _isTtsReady = false;
+  // 📍 1. เพิ่ม System Prompt อ้างอิง 2024 Thai HT Guidelines
+  static const String _systemPrompt = '''
+คุณคือ "ระบบปัญญาประดิษฐ์ทางการแพทย์" (AI Medical Assistant) เชี่ยวชาญด้านโรค NCDs (ความดันโลหิตสูงและเบาหวาน) 
+ทำหน้าที่สกัดข้อมูลตัวเลขสุขภาพและตรวจจับอาการเตือนอันตราย (Warning Signs) จาก "คำพูด/เสียง" และ "ภาพถ่ายหน้าจอ LCD" ของผู้ป่วย
+
+[อ้างอิง 2024 Thai HT Guidelines]
+1. ประชาชนทั่วไป: เป้าหมายความดันที่บ้าน (HBPM) < 135/85 mmHg
+2. ผู้ป่วย HT+DM/DLP/CKD หรือประวัติโรคหลอดเลือด: เป้าหมาย < 125/75 mmHg
+3. ผู้สูงอายุ (>= 80 ปี): SBP 130-139 mmHg
+4. ภาวะวิกฤต (Hypertensive Crisis): SBP >= 180 หรือ DBP >= 110 mmHg
+
+[การตรวจจับ Red Flags (CRITICAL)]
+หากพบอาการ: FAST (ปากเบี้ยว, อ่อนแรงครึ่งซีก, พูดไม่ชัด), แน่นหน้าอก, ปวดหัวรุนแรง, ตาพร่ามัว หรือ SBP >= 180 หรือ DBP >= 110
+- บังคับตั้งค่า "has_warning_sign": true และ "urgency_level": "CRITICAL"
+- ใน spoken_feedback ให้ตอบกลับด้วยความเร่งด่วน: "พบอาการหรือค่าความดันระดับวิกฤต! ให้นั่งพักนิ่งๆ ห้ามออกกำลังกายเด็ดขาด และกรุณาโทร 1669 หรือรีบไปโรงพยาบาลด่วนที่สุดค่ะ" (ห้ามแนะนำให้ทานยาเพิ่มเอง)
+
+[การแนะนำทั่วไปและ Out-of-Scope]
+- หากความดันสูงหรือตื่นเต้น ให้แนะนำว่า: "ความดันค่อนข้างสูง กรุณานั่งพักนิ่งๆ 15 นาที แล้ววัดใหม่อีกครั้งนะคะ"
+- หากข้อมูลไม่ใช่เรื่องสุขภาพ: เซ็ต "is_valid_health_data": false และตอบให้ผู้ป่วยกลับมาเรื่องการบันทึกสุขภาพ
+- หน้าที่สำคัญ: สร้าง "spoken_feedback" เป็นภาษาไทยที่สุภาพ กระชับ เป็นธรรมชาติ เพื่อให้ระบบ Text-to-Speech อ่านให้คนไข้ฟัง
+''';
 
   static final Schema _healthDataSchema = Schema.object(
     properties: {
@@ -72,6 +93,7 @@ class VoiceHealthService {
     _model = GenerativeModel(
       model: 'gemini-3.6-flash',
       apiKey: apiKey,
+      systemInstruction: Content.system(_systemPrompt),
       generationConfig: GenerationConfig(
         responseMimeType: 'application/json',
         responseSchema: _healthDataSchema,
@@ -112,7 +134,8 @@ class VoiceHealthService {
   }
 
   // 📍 1. ฟังก์ชันสกัดข้อมูลสุขภาพจากการพูด (STT)
-  Future<Map<String, dynamic>?> processSpeechToHealthData(String speechText) async {
+  Future<Map<String, dynamic>?> processSpeechToHealthData(
+      String speechText) async {
     try {
       final profileContext = await _profileService.getProfilePromptContext();
       final prompt = '''
@@ -139,7 +162,8 @@ class VoiceHealthService {
       final imageBytes = await imageFile.readAsBytes();
       final content = [
         Content.multi([
-          TextPart('อ่านค่าความดันตัวบน (SYS), ตัวล่าง (DIA), และชีพจร (PUL) จากรูปภาพหน้าจอเครื่องวัดความดัน'),
+          TextPart(
+              'อ่านค่าความดันตัวบน (SYS), ตัวล่าง (DIA), และชีพจร (PUL) จากรูปภาพหน้าจอเครื่องวัดความดัน'),
           DataPart('image/jpeg', imageBytes),
         ])
       ];
@@ -160,10 +184,12 @@ class VoiceHealthService {
   Future<Map<String, dynamic>?> processLabReportImage(File imageFile) async {
     try {
       final imageBytes = await imageFile.readAsBytes();
-      final visionModel = GenerativeModel(model: 'gemini-3.6-flash', apiKey: apiKey);
+      final visionModel =
+          GenerativeModel(model: 'gemini-3.6-flash', apiKey: apiKey);
       final content = [
         Content.multi([
-          TextPart('วิเคราะห์ใบแล็บและสกัดค่า Total Cholesterol, HDL, LDL, Fasting Blood Sugar, Creatinine ออกมาเป็น JSON'),
+          TextPart(
+              'วิเคราะห์ใบแล็บและสกัดค่า Total Cholesterol, HDL, LDL, Fasting Blood Sugar, Creatinine ออกมาเป็น JSON'),
           DataPart('image/jpeg', imageBytes),
         ])
       ];
@@ -172,8 +198,10 @@ class VoiceHealthService {
       final text = response.text;
       if (text != null) {
         String cleanedJson = text.trim();
-        if (cleanedJson.startsWith('```json')) cleanedJson = cleanedJson.substring(7);
-        if (cleanedJson.endsWith('```')) cleanedJson = cleanedJson.substring(0, cleanedJson.length - 3);
+        if (cleanedJson.startsWith('```json'))
+          cleanedJson = cleanedJson.substring(7);
+        if (cleanedJson.endsWith('```'))
+          cleanedJson = cleanedJson.substring(0, cleanedJson.length - 3);
         return jsonDecode(cleanedJson.trim()) as Map<String, dynamic>;
       }
       return null;
@@ -196,7 +224,7 @@ class VoiceHealthService {
       );
 
       final imageBytes = await imageFile.readAsBytes();
-      
+
       // 🚀 ตรวจสอบนามสกุลไฟล์อัตโนมัติ (รองรับทั้ง iOS และ Android)
       final extension = imageFile.path.split('.').last.toLowerCase();
       final mimeType = (extension == 'png') ? 'image/png' : 'image/jpeg';
@@ -204,26 +232,25 @@ class VoiceHealthService {
       final content = [
         Content.multi([
           TextPart(
-            'จงวิเคราะห์และสกัดข้อมูลฉลากยาจากภาพนี้ และตอบกลับเป็น JSON รูปแบบนี้เท่านั้น:\n'
-            '{\n'
-            '  "medication_name": "ชื่อยา (ถ้าเป็นภาษาอังกฤษให้คงไว้)",\n'
-            '  "dosage_instruction": "วิธีใช้ยา (เช่น รับประทานครั้งละ 1 เม็ด หลังอาหารเช้า เย็น)",\n'
-            '  "is_morning_active": true หรือ false,\n'
-            '  "time_morning": "08:00",\n'
-            '  "is_noon_active": true หรือ false,\n'
-            '  "time_noon": "12:00",\n'
-            '  "is_evening_active": true หรือ false,\n'
-            '  "time_evening": "18:00"\n'
-            '}\n'
-            'หากมื้อไหนไม่มีระบุในฉลาก ให้ตั้งค่า is_..._active เป็น false และเวลาเป็น "08:00"'
-          ),
+              'จงวิเคราะห์และสกัดข้อมูลฉลากยาจากภาพนี้ และตอบกลับเป็น JSON รูปแบบนี้เท่านั้น:\n'
+              '{\n'
+              '  "medication_name": "ชื่อยา (ถ้าเป็นภาษาอังกฤษให้คงไว้)",\n'
+              '  "dosage_instruction": "วิธีใช้ยา (เช่น รับประทานครั้งละ 1 เม็ด หลังอาหารเช้า เย็น)",\n'
+              '  "is_morning_active": true หรือ false,\n'
+              '  "time_morning": "08:00",\n'
+              '  "is_noon_active": true หรือ false,\n'
+              '  "time_noon": "12:00",\n'
+              '  "is_evening_active": true หรือ false,\n'
+              '  "time_evening": "18:00"\n'
+              '}\n'
+              'หากมื้อไหนไม่มีระบุในฉลาก ให้ตั้งค่า is_..._active เป็น false และเวลาเป็น "08:00"'),
           DataPart(mimeType, imageBytes),
         ])
       ];
 
       final response = await visionModel.generateContent(content);
       final text = response.text;
-      
+
       if (text != null && text.isNotEmpty) {
         // เนื่องจากล็อก responseMimeType แล้ว ข้อมูลที่ได้จะเป็น JSON ล้วนๆ ทันที
         return jsonDecode(text.trim());

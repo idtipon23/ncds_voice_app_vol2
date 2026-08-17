@@ -11,7 +11,7 @@ class NutritionService {
 
   NutritionService() {
     _model = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3.6-flash',
       apiKey: AppConfig.geminiApiKey,
       generationConfig: GenerationConfig(
         responseMimeType: 'application/json',

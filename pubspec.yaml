@@ -31,7 +31,7 @@ dependencies:
   provider: ^6.1.1
   pdf: ^3.10.8
   printing: ^5.13.0
-  record: ^5.1.2
+  record: ^7.1.1
 
   flutter_line_sdk: ^2.3.3
 
